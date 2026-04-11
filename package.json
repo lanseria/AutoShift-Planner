@@ -45,5 +45,9 @@
     "semver": "catalog:build",
     "unplugin": "catalog:build",
     "vite": "catalog:build"
+  },
+  "dependencies": {
+    "date-fns": "^4.1.0",
+    "es-toolkit": "^1.45.1"
   }
 }

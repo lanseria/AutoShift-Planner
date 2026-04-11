@@ -10,6 +10,7 @@ export default defineNuxtConfig({
     '@vite-pwa/nuxt',
     '@nuxt/eslint',
   ],
+  ssr: false,
 
   devtools: {
     enabled: true,
@@ -61,6 +62,15 @@ export default defineNuxtConfig({
       crawlLinks: false,
       routes: ['/'],
       ignore: ['/hi'],
+    },
+  },
+  vite: {
+    optimizeDeps: {
+      include: [
+        '@vue/devtools-core',
+        '@vue/devtools-kit',
+        'date-fns',
+      ],
     },
   },
 

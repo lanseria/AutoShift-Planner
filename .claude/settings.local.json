@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs cat:*)",
+      "Bash(xargs wc:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm build:*)",
+      "Bash(chmod +x:*)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\zhang\\Documents\\Code\\4-p"
+    ]
+  }
+}

@@ -1,2 +1,2 @@
-export const appName = 'Vitesse for Nuxt 4'
-export const appDescription = 'Vitesse for Nuxt 4'
+export const appName = 'AutoShift Planner'
+export const appDescription = '四人团队智能排班管理系统'

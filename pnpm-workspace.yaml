@@ -40,3 +40,6 @@ onlyBuiltDependencies:
   - '@parcel/watcher'
   - esbuild
   - unrs-resolver
+catalog:
+  date-fns: ^4.1.0
+  es-toolkit: ^1.45.1

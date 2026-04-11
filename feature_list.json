@@ -1,0 +1,48 @@
+{
+  "project": "AutoShift Planner",
+  "lastUpdated": "2026-04-12",
+  "features": [
+    {
+      "id": "F001",
+      "name": "排班表显示与手动编辑",
+      "status": "done",
+      "description": "周视图排班表（4人×7天×上午/下午），支持手动选择任务"
+    },
+    {
+      "id": "F002",
+      "name": "自动排班算法",
+      "status": "done",
+      "description": "基于约束满足+随机回溯的自动排班生成，支持固定任务、强制任务、连休等约束"
+    },
+    {
+      "id": "F003",
+      "name": "工作量统计",
+      "status": "done",
+      "description": "计算每人工作量，检测不均衡并显示告警"
+    },
+    {
+      "id": "F004",
+      "name": "数据持久化",
+      "status": "done",
+      "description": "基于 localStorage 的排班数据保存与加载"
+    },
+    {
+      "id": "F005",
+      "name": "周导航",
+      "status": "done",
+      "description": "前后周切换，显示周日期范围"
+    },
+    {
+      "id": "F006",
+      "name": "周末提醒",
+      "status": "done",
+      "description": "周末时检测下周未排班并弹窗提醒"
+    },
+    {
+      "id": "F007",
+      "name": "重置操作",
+      "status": "done",
+      "description": "全部重置 / 保留门诊重置"
+    }
+  ]
+}
