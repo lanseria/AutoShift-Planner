@@ -21,8 +21,4 @@ body,
   margin: 0;
   padding: 0;
 }
-
-html.dark {
-  color-scheme: dark;
-}
 </style>
