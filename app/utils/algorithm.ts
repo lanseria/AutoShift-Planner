@@ -1,6 +1,6 @@
 import type { DayOfWeek, StaffName, TaskName, WeekSchedule } from '~/types/schedule'
 import { format, parseISO, subWeeks } from 'date-fns'
-import { DAYS, STAFF } from '~/types/schedule'
+import { DAYS, STAFF, TASKS } from '~/types/schedule'
 import { loadSchedule } from './schedule'
 
 export const isEmptyOrRest = (task: TaskName): boolean => task === '' || task === '休假'
@@ -57,6 +57,8 @@ export function generateSchedule(currentSchedule: WeekSchedule): WeekSchedule | 
   }
 
   const MAX_ATTEMPTS = 1000
+  let bestSchedule: WeekSchedule | null = null
+  let minDiff = Infinity
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const newSchedule: WeekSchedule = JSON.parse(JSON.stringify(currentSchedule))
@@ -64,11 +66,39 @@ export function generateSchedule(currentSchedule: WeekSchedule): WeekSchedule | 
       for (const p of STAFF) {
         delete (newSchedule as any)[`_rest_${p}`]
       }
-      return newSchedule
+
+      // 计算当前排班表的工作量差值
+      let maxW = 0
+      let minW = Infinity
+      for (const p of STAFF) {
+        let w = 0
+        for (const d of DAYS) {
+          const am = newSchedule.data[p][d].AM
+          const pm = newSchedule.data[p][d].PM
+          if (am)
+            w += TASKS[am].weight
+          if (pm)
+            w += TASKS[pm].weight
+        }
+        maxW = Math.max(maxW, w)
+        minW = Math.min(minW, w)
+      }
+      const diff = maxW - minW
+
+      // 如果遇到了极其完美的均衡（差值 <= 1.0），直接返回即可
+      if (diff <= 1.0) {
+        return newSchedule
+      }
+
+      // 否则，记录遇到过的最均衡的结果，防止 1000 次都没遇到完美结果时无排班可用
+      if (diff < minDiff) {
+        minDiff = diff
+        bestSchedule = newSchedule
+      }
     }
   }
 
-  return null
+  return bestSchedule // 返回差值最小的可用排班
 }
 
 function getRandom<T>(arr: T[], n: number): T[] {
@@ -108,14 +138,12 @@ function tryGenerate(
         const manualPM = isManual(p, d, 'PM')
 
         if (isRestDay) {
-          // 休息天必须为空或手动指定了休假，绝不能是其他任务
           if ((manualAM && am !== '休假') || (manualPM && pm !== '休假')) {
             valid = false
             break
           }
         }
         else {
-          // 非休息天如果手动设置了休假，也会冲突
           if ((manualAM && am === '休假') || (manualPM && pm === '休假')) {
             valid = false
             break
@@ -294,6 +322,85 @@ function tryGenerate(
         schedule.data[p][d].PM = Math.random() > 0.5 ? '随访下午/夜' : '基础班'
       }
     }
+  }
+
+  // 6. Active Workload Balancing (贪心局部搜索平衡算法)
+  const getWorkload = (p: StaffName) => {
+    let w = 0
+    for (const d of DAYS) {
+      const am = schedule.data[p][d].AM
+      const pm = schedule.data[p][d].PM
+      if (am)
+        w += TASKS[am].weight
+      if (pm)
+        w += TASKS[pm].weight
+    }
+    return w
+  }
+
+  for (let iter = 0; iter < 50; iter++) {
+    const workloads = STAFF.map(p => ({ p, w: getWorkload(p) }))
+    workloads.sort((a, b) => b.w - a.w)
+    const maxP = workloads[0]!.p
+    const minP = workloads.at(-1)!.p
+    const diff = workloads[0]!.w - workloads.at(-1)!.w
+
+    if (diff <= 1.0)
+      break // 已经足够平衡，跳出调整
+
+    let moved = false
+
+    // 策略1：将高负荷人员的非必要任务降级减重
+    for (const d of DAYS) {
+      // 随访下午/夜(1.0) 降级为 基础班(0.8)
+      if (!isManual(maxP, d, 'PM') && schedule.data[maxP][d].PM === '随访下午/夜') {
+        schedule.data[maxP][d].PM = '基础班'
+        moved = true; break
+      }
+      // 随访上午(1.0) 降级为 无任务(0)，但必须保证下午非空，避免造成非法的纯空工作日
+      if (!isManual(maxP, d, 'AM') && schedule.data[maxP][d].AM === '随访上午') {
+        if (schedule.data[maxP][d].PM !== '' && schedule.data[maxP][d].PM !== '休假') {
+          schedule.data[maxP][d].AM = ''
+          moved = true; break
+        }
+      }
+    }
+    if (moved)
+      continue
+
+    // 策略2：将低负荷人员的非必要空闲升级增重
+    for (const d of DAYS) {
+      // 基础班(0.8) 升级为 随访下午/夜(1.0)，需验证夜班疲劳规则
+      if (!isManual(minP, d, 'PM') && schedule.data[minP][d].PM === '基础班') {
+        const nextDay = getNextDay(d)
+        const nextAM = nextDay ? schedule.data[minP][nextDay].AM : ''
+        if (nextAM === '' || nextAM === '休假') {
+          schedule.data[minP][d].PM = '随访下午/夜'
+          moved = true; break
+        }
+      }
+      // 无任务(0) 升级为 随访上午(1.0)，需验证连休和上午疲劳规则
+      if (!isManual(minP, d, 'AM') && schedule.data[minP][d].AM === '') {
+        const restDays = (schedule as any)[`_rest_${minP}`] as DayOfWeek[]
+        if (restDays.includes(d))
+          continue // 不能破坏合法休息日
+
+        const prevDay = getPrevDay(d)
+        const nextDay = getNextDay(d)
+        const prevAM = prevDay ? schedule.data[minP][prevDay].AM : context.sundayAM[minP]
+        const nextAM = nextDay ? schedule.data[minP][nextDay].AM : ''
+        const prevPM = prevDay ? schedule.data[minP][prevDay].PM : context.sundayPM[minP]
+
+        if (prevPM !== '随访下午/夜' && !isAMFatigueTask(prevAM) && !isAMFatigueTask(nextAM)) {
+          schedule.data[minP][d].AM = '随访上午'
+          moved = true; break
+        }
+      }
+    }
+    if (moved)
+      continue
+
+    break // 没有可以安全降级或升级的格子，局部最优
   }
 
   return validateSchedule(schedule, context, isManual)
