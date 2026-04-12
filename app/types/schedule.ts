@@ -58,4 +58,5 @@ export type PersonSchedule = Record<DayOfWeek, DaySchedule>
 export interface WeekSchedule {
   weekStartDate: string // YYYY-MM-DD
   data: Record<StaffName, PersonSchedule>
+  restDays?: Record<StaffName, number> // 新增：单周每个人的休息天数配置
 }

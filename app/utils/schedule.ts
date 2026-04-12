@@ -1,5 +1,5 @@
-import { format, startOfWeek } from 'date-fns'
 import type { DaySchedule, PersonSchedule, StaffName, WeekSchedule } from '~/types/schedule'
+import { format, startOfWeek } from 'date-fns'
 import { DAYS, STAFF, TASKS } from '~/types/schedule'
 
 export function getEmptyPersonSchedule(): PersonSchedule {
@@ -15,7 +15,11 @@ export function getEmptyWeekSchedule(weekStartDate: string): WeekSchedule {
   for (const person of STAFF)
     data[person] = getEmptyPersonSchedule()
 
-  return { weekStartDate, data }
+  return {
+    weekStartDate,
+    data,
+    restDays: { 朱克捷: 2, 高琪: 2, 李敏欣: 2, 杨秀芬: 2 },
+  }
 }
 
 export function getWeekStart(date: Date): string {
@@ -31,7 +35,11 @@ export function loadSchedule(weekStartDate: string): WeekSchedule {
   const stored = localStorage.getItem(key)
   if (stored) {
     try {
-      return JSON.parse(stored) as WeekSchedule
+      const parsed = JSON.parse(stored) as WeekSchedule
+      if (!parsed.restDays) {
+        parsed.restDays = { 朱克捷: 2, 高琪: 2, 李敏欣: 2, 杨秀芬: 2 }
+      }
+      return parsed
     }
     catch (e) {
       console.error('Failed to parse schedule', e)

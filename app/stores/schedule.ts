@@ -62,21 +62,13 @@ export const useScheduleStore = defineStore('schedule', () => {
     schedule.value.data[person][day][period] = task
   }
 
-  function autoGenerate(): boolean {
-    if (!schedule.value)
-      return false
-    const generated = generateSchedule(schedule.value)
-    if (generated) {
-      schedule.value = generated
-      return true
-    }
-    return false
-  }
-
-  function save() {
+  function updateRestDays(person: StaffName, days: number) {
     if (!schedule.value)
       return
-    saveSchedule(schedule.value)
+    if (!schedule.value.restDays) {
+      schedule.value.restDays = { 朱克捷: 2, 高琪: 2, 李敏欣: 2, 杨秀芬: 2 }
+    }
+    schedule.value.restDays[person] = days
   }
 
   function resetAll() {
@@ -127,10 +119,56 @@ export const useScheduleStore = defineStore('schedule', () => {
       showWeekendAlert.value = true
   }
 
+  function save() {
+    if (!schedule.value)
+      return
+    saveSchedule(schedule.value)
+  }
+
   function goToNextWeek() {
     showWeekendAlert.value = false
     currentDate.value = addWeeks(new Date(), 1)
     loadWeek()
+  }
+
+  const highlightedTasks = ref<TaskName[] | null>(null)
+
+  function setHighlight(tasks: TaskName[]) {
+    highlightedTasks.value = tasks
+  }
+
+  function clearHighlight() {
+    highlightedTasks.value = null
+  }
+
+  const activeRules = ref<string[]>([
+    'daily_basic',
+    'dept_mandatory',
+    'fixed_tasks',
+    'personal_mandatory',
+    'consecutive_rest',
+    'night_fatigue',
+    'am_fatigue',
+  ])
+
+  function toggleRule(ruleKey: string) {
+    if (activeRules.value.includes(ruleKey)) {
+      activeRules.value = activeRules.value.filter(r => r !== ruleKey)
+    }
+    else {
+      activeRules.value.push(ruleKey)
+    }
+  }
+
+  function autoGenerate(): boolean {
+    if (!schedule.value)
+      return false
+    const generated = generateSchedule(schedule.value, activeRules.value)
+    if (generated) {
+      schedule.value = generated
+      return true
+    }
+    return false
   }
 
   return {
@@ -142,15 +180,21 @@ export const useScheduleStore = defineStore('schedule', () => {
     isUnbalanced,
     workloadDiff,
     showWeekendAlert,
+    highlightedTasks,
+    activeRules,
     loadWeek,
     prevWeek,
     nextWeek,
     updateTask,
+    updateRestDays,
     autoGenerate,
     save,
     resetAll,
     resetKeepClinic,
     checkWeekendAlert,
     goToNextWeek,
+    setHighlight,
+    clearHighlight,
+    toggleRule,
   }
 })

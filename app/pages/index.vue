@@ -122,6 +122,7 @@ function handleResetKeepClinic() {
 
         <div class="lg:col-span-1">
           <WorkloadDashboard />
+          <RulePanel />
         </div>
       </div>
     </div>
