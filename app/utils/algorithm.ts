@@ -5,14 +5,14 @@ import { loadSchedule } from './schedule'
 
 export const isEmptyOrRest = (task: TaskName): boolean => task === '' || task === '休假'
 
-interface PrevWeekContext {
+export interface PrevWeekContext {
   sundayAM: Record<StaffName, TaskName>
   sundayPM: Record<StaffName, TaskName>
   saturdayEmpty: Record<StaffName, boolean>
   sundayEmpty: Record<StaffName, boolean>
 }
 
-function getPrevWeekContext(weekStartDate: string): PrevWeekContext {
+export function getPrevWeekContext(weekStartDate: string): PrevWeekContext {
   const prevWeekDate = format(subWeeks(parseISO(weekStartDate), 1), 'yyyy-MM-dd')
   const prevSchedule = loadSchedule(prevWeekDate)
 
@@ -54,31 +54,60 @@ export interface ScheduleGroup {
   schedules: WeekSchedule[]
 }
 
-export function generateSchedule(currentSchedule: WeekSchedule, activeRules: string[]): ScheduleGroup[] | null {
-  const context = getPrevWeekContext(currentSchedule.weekStartDate)
+/**
+ * 生成排班方案的特征签名，用于排除成员A/B/C互换导致的重复
+ */
+function getScheduleSignature(schedule: WeekSchedule): string {
+  // 组长是固定的，直接转化
+  const leaderData = JSON.stringify(schedule.data['组长'])
 
+  // 成员A, B, C 是等价的，将他们的排班数据存入数组并进行排序
+  const memberSchedules = [
+    JSON.stringify(schedule.data['成员A']),
+    JSON.stringify(schedule.data['成员B']),
+    JSON.stringify(schedule.data['成员C']),
+  ].sort() // 字母排序保证了 A/B/C 互换位置后签名一致
+
+  return `${leaderData}|${memberSchedules.join('||')}`
+}
+
+/**
+ * 搜索上限建议：
+ * 5,000: 极速平衡
+ * 15,000: 深度搜索，能覆盖大部分本质不同的方案
+ * 300,000: 深度穷举（需配合 Web Worker 使用，避免阻塞 UI）
+ */
+const MAX_ATTEMPTS = 2000000
+const PROGRESS_INTERVAL = Math.max(1, Math.floor(MAX_ATTEMPTS / 200))
+
+export function generateScheduleCore(
+  currentSchedule: WeekSchedule,
+  activeRules: string[],
+  context: PrevWeekContext,
+  onProgress?: (progress: number) => void,
+): ScheduleGroup[] | null {
   const isManual = (person: StaffName, day: DayOfWeek, period: 'AM' | 'PM'): boolean => {
     return currentSchedule.data[person][day][period] !== ''
   }
 
   const restDaysConfig = currentSchedule.restDays || { 组长: 2, 成员A: 2, 成员B: 2, 成员C: 2 }
-  const MAX_ATTEMPTS = 2000
 
-  const diffMap = new Map<number, Set<string>>()
+  const diffGroups = new Map<number, Map<string, WeekSchedule>>()
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const newSchedule: WeekSchedule = JSON.parse(JSON.stringify(currentSchedule))
+
     if (tryGenerate(newSchedule, context, isManual, activeRules, restDaysConfig)) {
+      // 清理临时数据
       for (const p of STAFF) {
         delete (newSchedule as any)[`_rest_${p}`]
       }
 
-      let maxW = 0
-      let minW = Infinity
+      // 计算工作量差值（仅限成员）
+      const memberWorkloads: number[] = []
       for (const p of STAFF) {
         if (p === '组长')
-          continue // 组长不参与工作量差值的考核
-
+          continue
         let w = 0
         for (const d of DAYS) {
           const am = newSchedule.data[p][d].AM
@@ -88,36 +117,51 @@ export function generateSchedule(currentSchedule: WeekSchedule, activeRules: str
           if (pm && TASKS[pm])
             w += TASKS[pm].weight
         }
-        maxW = Math.max(maxW, w)
-        minW = Math.min(minW, w)
+        memberWorkloads.push(w)
       }
-      const diff = Number((maxW - minW).toFixed(1))
+      const diff = Number((Math.max(...memberWorkloads) - Math.min(...memberWorkloads)).toFixed(1))
 
-      // 成员间差值最大允许为 1.0，将所有合法的组合按差值分组记录并去重
-      if (diff <= 1.0) {
-        if (!diffMap.has(diff)) {
-          diffMap.set(diff, new Set<string>())
-        }
-        diffMap.get(diff)!.add(JSON.stringify(newSchedule))
+      // 生成方案的唯一特征签名（排除ABC互换干扰）
+      const signature = getScheduleSignature(newSchedule)
+
+      if (!diffGroups.has(diff)) {
+        diffGroups.set(diff, new Map())
       }
+
+      // 如果该差值下还没有这个”本质不同”的方案，则记录
+      if (!diffGroups.get(diff)!.has(signature)) {
+        diffGroups.get(diff)!.set(signature, newSchedule)
+      }
+    }
+
+    if (onProgress && attempt % PROGRESS_INTERVAL === 0) {
+      onProgress((attempt / MAX_ATTEMPTS) * 100)
     }
   }
 
-  if (diffMap.size > 0) {
+  if (onProgress)
+    onProgress(100)
+
+  if (diffGroups.size > 0) {
     const result: ScheduleGroup[] = []
-    const sortedDiffs = Array.from(diffMap.keys()).sort((a, b) => a - b)
+    const sortedDiffs = Array.from(diffGroups.keys()).sort((a, b) => a - b)
 
     for (const diff of sortedDiffs) {
-      const uniqueArr = Array.from(diffMap.get(diff)!)
+      const schedules = Array.from(diffGroups.get(diff)!.values())
       result.push({
         diff,
-        schedules: uniqueArr.map(str => JSON.parse(str)),
+        schedules,
       })
     }
     return result
   }
 
   return null
+}
+
+export function generateSchedule(currentSchedule: WeekSchedule, activeRules: string[]): ScheduleGroup[] | null {
+  const context = getPrevWeekContext(currentSchedule.weekStartDate)
+  return generateScheduleCore(currentSchedule, activeRules, context)
 }
 
 function getRandom<T>(arr: T[], n: number): T[] {
@@ -139,7 +183,7 @@ function getCombinations<T>(arr: T[], k: number): T[][] {
       return
     }
     for (let i = start; i < arr.length; i++) {
-      current.push(arr[i])
+      current.push(arr[i]!)
       dfs(i + 1, current)
       current.pop()
     }
@@ -357,7 +401,7 @@ function tryGenerate(
           return true
         let slots = getAvailableSlots((_p, d, _period) => _p === p && schedule.data[p][d].AM === '' && schedule.data[p][d].PM === '')
         if (slots.length === 0)
-          slots = getAvailableSlots((_p, d, _period) => _p === p)
+          slots = getAvailableSlots((_p, _d, _period) => _p === p)
         if (slots.length === 0)
           return false
         const chosen = getRandom(slots, 1)[0]!
@@ -386,7 +430,9 @@ function validateSchedule(
 
   if (hasRule('daily_basic')) {
     for (const d of DAYS) {
-      let sfam = 0; let sfpm = 0; let jc = 0
+      let sfam = 0
+      let sfpm = 0
+      let jc = 0
       for (const p of STAFF) {
         if (schedule.data[p][d].AM === '随访上午')
           sfam++

@@ -3,13 +3,15 @@ import type { ScheduleGroup } from '~/utils/algorithm'
 import { addDays, addWeeks, format, isSaturday, isSunday, parseISO, subWeeks } from 'date-fns'
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
+import { useAlgorithmWorker } from '~/composables/useAlgorithmWorker'
 import { DAYS, STAFF } from '~/types/schedule'
-import { generateSchedule } from '~/utils/algorithm'
+import { getPrevWeekContext } from '~/utils/algorithm'
 import { calculateWorkload, getWeekStart, loadSchedule, saveSchedule } from '~/utils/schedule'
 
 export const useScheduleStore = defineStore('schedule', () => {
   const currentDate = ref(new Date())
   const schedule = ref<WeekSchedule | null>(null)
+  const { progress, isGenerating, run: runWorker } = useAlgorithmWorker()
 
   const weekStartDate = computed(() => getWeekStart(currentDate.value))
 
@@ -179,11 +181,12 @@ export const useScheduleStore = defineStore('schedule', () => {
     }
   }
 
-  function autoGenerate(): { success: boolean, msg: string } {
+  async function autoGenerate(): Promise<{ success: boolean, msg: string }> {
     if (!schedule.value)
       return { success: false, msg: '没有排班表' }
 
-    const resultGroups = generateSchedule(schedule.value, activeRules.value)
+    const context = getPrevWeekContext(schedule.value.weekStartDate)
+    const resultGroups = await runWorker(schedule.value, activeRules.value, context)
     if (resultGroups && resultGroups.length > 0) {
       generatedResults.value = resultGroups
       const totalSchedules = resultGroups.reduce((acc, g) => acc + g.schedules.length, 0)
@@ -227,5 +230,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     generatedResults,
     applyGenerated,
     clearGenerated,
+    progress,
+    isGenerating,
   }
 })

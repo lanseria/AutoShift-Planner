@@ -11,8 +11,8 @@ onMounted(() => {
   store.checkWeekendAlert()
 })
 
-function handleAutoGenerate() {
-  const res = store.autoGenerate()
+async function handleAutoGenerate() {
+  const res = await store.autoGenerate()
   if (res.success)
     toast.success(res.msg)
   else
@@ -105,11 +105,13 @@ function handleResetKeepClinic() {
                   <span class="hidden sm:inline">保留门诊重置</span>
                 </button>
                 <button
-                  class="text-sm text-gray-700 font-medium px-3 py-1.5 border border-gray-200 rounded-lg inline-flex gap-1.5 transition-colors items-center hover:bg-gray-50"
+                  class="text-sm text-gray-700 font-medium px-3 py-1.5 border border-gray-200 rounded-lg inline-flex gap-1.5 transition-colors items-center hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  :disabled="store.isGenerating"
                   @click="handleAutoGenerate"
                 >
-                  <div class="i-carbon-machine-learning-model text-sm" />
-                  自动生成
+                  <div v-if="store.isGenerating" class="i-carbon-renew text-sm animate-spin" />
+                  <div v-else class="i-carbon-machine-learning-model text-sm" />
+                  {{ store.isGenerating ? `生成中 ${Math.round(store.progress)}%` : '自动生成' }}
                 </button>
                 <button
                   class="text-sm text-white font-medium px-3 py-1.5 rounded-lg bg-blue-500 inline-flex gap-1.5 transition-colors items-center hover:bg-blue-600"
@@ -122,6 +124,19 @@ function handleResetKeepClinic() {
             </div>
             <div class="p-6">
               <ScheduleTable />
+              <!-- Progress Bar -->
+              <div v-if="store.isGenerating" class="mt-4">
+                <div class="mb-1 flex items-center justify-between">
+                  <span class="text-sm text-gray-600">正在搜索最优排班方案...</span>
+                  <span class="text-sm text-blue-600 font-medium">{{ Math.round(store.progress) }}%</span>
+                </div>
+                <div class="rounded-full bg-gray-200 h-2 w-full overflow-hidden">
+                  <div
+                    class="rounded-full bg-blue-500 h-full transition-all duration-150 ease-linear"
+                    :style="{ width: `${store.progress}%` }"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
