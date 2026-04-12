@@ -18,7 +18,7 @@ export function getEmptyWeekSchedule(weekStartDate: string): WeekSchedule {
   return {
     weekStartDate,
     data,
-    restDays: { 朱克捷: 2, 高琪: 2, 李敏欣: 2, 杨秀芬: 2 },
+    restDays: { 组长: 2, 成员A: 2, 成员B: 2, 成员C: 2 },
   }
 }
 
@@ -36,8 +36,12 @@ export function loadSchedule(weekStartDate: string): WeekSchedule {
   if (stored) {
     try {
       const parsed = JSON.parse(stored) as WeekSchedule
+      // 兼容性处理：如果本地缓存还是旧名字，丢弃它
+      if (!parsed.data['组长']) {
+        return getEmptyWeekSchedule(weekStartDate)
+      }
       if (!parsed.restDays) {
-        parsed.restDays = { 朱克捷: 2, 高琪: 2, 李敏欣: 2, 杨秀芬: 2 }
+        parsed.restDays = { 组长: 2, 成员A: 2, 成员B: 2, 成员C: 2 }
       }
       return parsed
     }

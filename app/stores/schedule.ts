@@ -35,7 +35,10 @@ export const useScheduleStore = defineStore('schedule', () => {
   })
 
   const workloadDiff = computed(() => {
-    const values = Object.values(workload.value) as number[]
+    // 工作量差值只考虑成员，组长不参与比较
+    const values = Object.keys(workload.value)
+      .filter(p => p !== '组长')
+      .map(p => workload.value[p as StaffName]) as number[]
     if (values.length === 0)
       return 0
     return Math.max(...values) - Math.min(...values)
@@ -79,7 +82,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     if (!schedule.value)
       return
     if (!schedule.value.restDays) {
-      schedule.value.restDays = { 朱克捷: 2, 高琪: 2, 李敏欣: 2, 杨秀芬: 2 }
+      schedule.value.restDays = { 组长: 2, 成员A: 2, 成员B: 2, 成员C: 2 }
     }
     schedule.value.restDays[person] = days
     clearGenerated()

@@ -131,6 +131,7 @@ function handleResetKeepClinic() {
               <h2 class="text-2xl text-gray-900 font-bold">
                 可选排班方案
               </h2>
+              <span class="text-sm text-gray-500 font-normal ml-3 mt-1 flex-1">成员工作量差值 (组长不参与比较)</span>
               <button
                 class="text-sm text-gray-500 font-medium px-3 py-1.5 rounded-lg bg-gray-100 transition-colors hover:text-gray-800 hover:bg-gray-200"
                 @click="store.clearGenerated()"

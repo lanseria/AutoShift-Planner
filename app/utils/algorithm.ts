@@ -61,7 +61,7 @@ export function generateSchedule(currentSchedule: WeekSchedule, activeRules: str
     return currentSchedule.data[person][day][period] !== ''
   }
 
-  const restDaysConfig = currentSchedule.restDays || { 朱克捷: 2, 高琪: 2, 李敏欣: 2, 杨秀芬: 2 }
+  const restDaysConfig = currentSchedule.restDays || { 组长: 2, 成员A: 2, 成员B: 2, 成员C: 2 }
   const MAX_ATTEMPTS = 2000
 
   const diffMap = new Map<number, Set<string>>()
@@ -76,6 +76,9 @@ export function generateSchedule(currentSchedule: WeekSchedule, activeRules: str
       let maxW = 0
       let minW = Infinity
       for (const p of STAFF) {
+        if (p === '组长')
+          continue // 组长不参与工作量差值的考核
+
         let w = 0
         for (const d of DAYS) {
           const am = newSchedule.data[p][d].AM
@@ -90,8 +93,8 @@ export function generateSchedule(currentSchedule: WeekSchedule, activeRules: str
       }
       const diff = Number((maxW - minW).toFixed(1))
 
-      // 差值最大允许为 2.0，将所有合法的组合按差值分组记录并去重
-      if (diff <= 2.0) {
+      // 成员间差值最大允许为 1.0，将所有合法的组合按差值分组记录并去重
+      if (diff <= 1.0) {
         if (!diffMap.has(diff)) {
           diffMap.set(diff, new Set<string>())
         }

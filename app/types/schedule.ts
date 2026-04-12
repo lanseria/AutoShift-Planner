@@ -32,7 +32,7 @@ export const TASKS: Record<TaskName, TaskInfo> = {
   '': { name: '', period: 'ANY', type: 'AUTO', weight: 0 },
 }
 
-export const STAFF = ['朱克捷', '高琪', '李敏欣', '杨秀芬'] as const
+export const STAFF = ['组长', '成员A', '成员B', '成员C'] as const
 export type StaffName = typeof STAFF[number]
 
 export type DayOfWeek = 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday'
