@@ -1,15 +1,15 @@
-export type TaskName =
-  | '门诊'
-  | '随访上午'
-  | '随访下午/夜'
-  | '基础班'
-  | '电话'
-  | '筛查'
-  | '运动处方'
-  | '舌苔评估'
-  | '群石墨修改'
-  | '休假'
-  | ''
+export type TaskName
+  = | '门诊'
+    | '随访上午'
+    | '随访下午/夜'
+    | '基础班'
+    | '电话'
+    | '筛查'
+    | '运动处方'
+    | '舌苔评估'
+    | '群石墨修改'
+    | '休假'
+    | ''
 
 export interface TaskInfo {
   name: TaskName
@@ -27,7 +27,7 @@ export const TASKS: Record<TaskName, TaskInfo> = {
   '筛查': { name: '筛查', period: 'ANY', type: 'MANDATORY', weight: 1.0 },
   '运动处方': { name: '运动处方', period: 'PM', type: 'DEPT_MANDATORY', weight: 0.5 },
   '舌苔评估': { name: '舌苔评估', period: 'AM', type: 'DEPT_MANDATORY', weight: 0.8 },
-  '群石墨修改': { name: '群石墨修改', period: 'PM', type: 'FIXED', weight: 1.0 },
+  '群石墨修改': { name: '群石墨修改', period: 'PM', type: 'FIXED', weight: 0.8 },
   '休假': { name: '休假', period: 'ANY', type: 'MANUAL', weight: 0 },
   '': { name: '', period: 'ANY', type: 'AUTO', weight: 0 },
 }

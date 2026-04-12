@@ -36,12 +36,12 @@ function handleResetKeepClinic() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 p-4 md:p-8">
-    <div class="max-w-7xl mx-auto space-y-6">
+  <div class="p-4 bg-gray-50 min-h-screen md:p-8">
+    <div class="mx-auto max-w-7xl space-y-6">
       <!-- Header -->
-      <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div class="flex flex-col gap-4 items-start justify-between md:flex-row md:items-center">
         <div>
-          <h1 class="text-3xl font-bold tracking-tight text-gray-900">
+          <h1 class="text-3xl text-gray-900 tracking-tight font-bold">
             排班管理系统
           </h1>
           <p class="text-gray-500 mt-1">
@@ -50,19 +50,19 @@ function handleResetKeepClinic() {
         </div>
 
         <!-- Week Navigation -->
-        <div class="flex items-center gap-2 bg-white p-1 rounded-lg border border-gray-200 shadow-sm">
+        <div class="p-1 border border-gray-200 rounded-lg bg-white flex gap-2 shadow-sm items-center">
           <button
-            class="p-2 rounded-md hover:bg-gray-100 transition-colors text-gray-600"
+            class="text-gray-600 p-2 rounded-md transition-colors hover:bg-gray-100"
             @click="store.prevWeek()"
           >
             <div class="i-carbon-chevron-left text-lg" />
           </button>
-          <div class="flex items-center gap-2 px-4 py-2 font-medium text-sm">
+          <div class="text-sm font-medium px-4 py-2 flex gap-2 items-center">
             <div class="i-carbon-calendar text-gray-400" />
             {{ store.weekDisplayText }}
           </div>
           <button
-            class="p-2 rounded-md hover:bg-gray-100 transition-colors text-gray-600"
+            class="text-gray-600 p-2 rounded-md transition-colors hover:bg-gray-100"
             @click="store.nextWeek()"
           >
             <div class="i-carbon-chevron-right text-lg" />
@@ -71,42 +71,42 @@ function handleResetKeepClinic() {
       </div>
 
       <!-- Main Content -->
-      <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div class="lg:col-span-3 space-y-6">
-          <div class="rounded-lg border border-gray-200 bg-white overflow-hidden">
-            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between px-6 py-4 border-b border-gray-100 gap-3">
+      <div class="gap-6 grid grid-cols-1 lg:grid-cols-4">
+        <div class="space-y-6 lg:col-span-3">
+          <div class="border border-gray-200 rounded-lg bg-white overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-100 flex flex-col gap-3 items-start justify-between sm:flex-row sm:items-center">
               <div>
-                <h2 class="text-lg font-semibold text-gray-900">
+                <h2 class="text-lg text-gray-900 font-semibold">
                   本周排班表
                 </h2>
                 <p class="text-sm text-gray-500">
                   在单元格中手动选择任务，或点击自动生成
                 </p>
               </div>
-              <div class="flex items-center gap-2 flex-wrap">
+              <div class="flex flex-wrap gap-2 items-center">
                 <button
-                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+                  class="text-sm text-gray-700 font-medium px-3 py-1.5 border border-gray-200 rounded-lg inline-flex gap-1.5 transition-colors items-center hover:bg-gray-50"
                   @click="handleResetAll"
                 >
                   <div class="i-carbon-reset text-sm" />
                   <span class="hidden sm:inline">全部重置</span>
                 </button>
                 <button
-                  class="inline-flex items-center items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+                  class="text-sm text-gray-700 font-medium px-3 py-1.5 border border-gray-200 rounded-lg inline-flex gap-1.5 transition-colors items-center items-center hover:bg-gray-50"
                   @click="handleResetKeepClinic"
                 >
                   <div class="i-carbon-clean text-sm" />
                   <span class="hidden sm:inline">保留门诊重置</span>
                 </button>
                 <button
-                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+                  class="text-sm text-gray-700 font-medium px-3 py-1.5 border border-gray-200 rounded-lg inline-flex gap-1.5 transition-colors items-center hover:bg-gray-50"
                   @click="handleAutoGenerate"
                 >
                   <div class="i-carbon-machine-learning-model text-sm" />
                   自动生成
                 </button>
                 <button
-                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                  class="text-sm text-white font-medium px-3 py-1.5 rounded-lg bg-blue-500 inline-flex gap-1.5 transition-colors items-center hover:bg-blue-600"
                   @click="handleSave"
                 >
                   <div class="i-carbon-save text-sm" />
