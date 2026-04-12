@@ -1,4 +1,5 @@
 import type { DayOfWeek, StaffName, TaskName, WeekSchedule } from '~/types/schedule'
+import type { ScheduleGroup } from '~/utils/algorithm'
 import { addDays, addWeeks, format, isSaturday, isSunday, parseISO, subWeeks } from 'date-fns'
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
@@ -56,10 +57,22 @@ export const useScheduleStore = defineStore('schedule', () => {
     loadWeek()
   }
 
+  const generatedResults = ref<ScheduleGroup[] | null>(null)
+
+  function clearGenerated() {
+    generatedResults.value = null
+  }
+
+  function applyGenerated(sch: WeekSchedule) {
+    schedule.value = JSON.parse(JSON.stringify(sch))
+    clearGenerated()
+  }
+
   function updateTask(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM', task: TaskName) {
     if (!schedule.value)
       return
     schedule.value.data[person][day][period] = task
+    clearGenerated()
   }
 
   function updateRestDays(person: StaffName, days: number) {
@@ -69,6 +82,7 @@ export const useScheduleStore = defineStore('schedule', () => {
       schedule.value.restDays = { 朱克捷: 2, 高琪: 2, 李敏欣: 2, 杨秀芬: 2 }
     }
     schedule.value.restDays[person] = days
+    clearGenerated()
   }
 
   function resetAll() {
@@ -80,6 +94,7 @@ export const useScheduleStore = defineStore('schedule', () => {
         schedule.value.data[person][day].PM = ''
       }
     }
+    clearGenerated()
   }
 
   function resetKeepClinic() {
@@ -93,6 +108,7 @@ export const useScheduleStore = defineStore('schedule', () => {
           schedule.value.data[person][day].PM = ''
       }
     }
+    clearGenerated()
   }
 
   function checkWeekendAlert() {
@@ -160,15 +176,24 @@ export const useScheduleStore = defineStore('schedule', () => {
     }
   }
 
-  function autoGenerate(): boolean {
+  function autoGenerate(): { success: boolean, msg: string } {
     if (!schedule.value)
-      return false
-    const generated = generateSchedule(schedule.value, activeRules.value)
-    if (generated) {
-      schedule.value = generated
-      return true
+      return { success: false, msg: '没有排班表' }
+
+    const resultGroups = generateSchedule(schedule.value, activeRules.value)
+    if (resultGroups && resultGroups.length > 0) {
+      generatedResults.value = resultGroups
+      const totalSchedules = resultGroups.reduce((acc, g) => acc + g.schedules.length, 0)
+      return {
+        success: true,
+        msg: `生成成功！共找到 ${totalSchedules} 种排班方案，已按工作量差值从小到大排序。`,
+      }
     }
-    return false
+
+    return {
+      success: false,
+      msg: '条件过于严苛或已被手动任务占满，无法找到工作量差值 ≤ 2.0 的合法排班。请微调或取消部分规则。',
+    }
   }
 
   return {
@@ -196,5 +221,8 @@ export const useScheduleStore = defineStore('schedule', () => {
     setHighlight,
     clearHighlight,
     toggleRule,
+    generatedResults,
+    applyGenerated,
+    clearGenerated,
   }
 })

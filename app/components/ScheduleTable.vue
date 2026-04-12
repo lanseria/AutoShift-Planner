@@ -29,6 +29,42 @@ function isHighlighted(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM'): 
   const task = store.schedule.data[person][day][period]
   return store.highlightedTasks.includes(task)
 }
+
+function getCellClasses(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM'): string {
+  if (!store.schedule)
+    return ''
+  const task = store.schedule.data[person][day][period]
+  const highlighted = isHighlighted(person, day, period)
+
+  // 1. 如果处于规则高亮状态
+  if (highlighted) {
+    return 'bg-blue-200 ring-2 ring-blue-500 z-10 relative text-blue-900 font-bold'
+  }
+
+  // 2. 根据任务类型分配背景色和文字颜色
+  switch (task) {
+    case '':
+      return 'bg-amber-200 hover:bg-amber-300 text-amber-900 font-bold' // 醒目的未设置 (预留门诊)
+    case '休假':
+      return 'bg-gray-100 hover:bg-gray-200 text-gray-400' // 置灰的休假
+    case '门诊':
+      return 'bg-rose-50 hover:bg-rose-100 text-rose-700 font-medium' // 优先手动任务
+    case '随访上午':
+    case '随访下午/夜':
+    case '基础班':
+      return 'bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium' // 每日基础任务
+    case '电话':
+    case '筛查':
+      return 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-medium' // 个人必排任务
+    case '运动处方':
+    case '舌苔评估':
+      return 'bg-purple-50 hover:bg-purple-100 text-purple-700 font-medium' // 部门必排任务
+    case '群石墨修改':
+      return 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium' // 团队固定任务
+    default:
+      return 'bg-transparent hover:bg-gray-50'
+  }
+}
 </script>
 
 <template>
@@ -90,14 +126,14 @@ function isHighlighted(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM'): 
               v-for="day in DAYS"
               :key="`${person}-${day}-AM`"
               class="p-0 border-b border-r border-gray-100 border-gray-200 transition-colors duration-300 last:border-r-0"
-              :class="isHighlighted(person, day, 'AM') ? 'bg-blue-100 ring-2 ring-blue-400 z-10 relative' : ''"
+              :class="getCellClasses(person, day, 'AM')"
             >
               <select
                 :value="store.schedule?.data[person][day].AM || ''"
-                class="text-xs px-1 border-0 bg-transparent h-10 w-full cursor-pointer focus:outline-none hover:bg-gray-50/50 focus:ring-0"
+                class="text-xs text-inherit px-1 border-0 bg-transparent h-10 w-full cursor-pointer focus:outline-none focus:ring-0"
                 @change="handleTaskChange(person, day, 'AM', $event)"
               >
-                <option value="">
+                <option value="" class="text-gray-900 font-normal">
                   未设置
                 </option>
                 <option
@@ -105,6 +141,7 @@ function isHighlighted(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM'): 
                   :key="task.name"
                   :value="task.name"
                   :disabled="isTaskDisabled(task, 'AM')"
+                  class="text-gray-900 font-normal"
                 >
                   {{ task.name }}
                 </option>
@@ -119,14 +156,14 @@ function isHighlighted(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM'): 
               v-for="day in DAYS"
               :key="`${person}-${day}-PM`"
               class="p-0 border-r border-gray-200 transition-colors duration-300 last:border-r-0"
-              :class="isHighlighted(person, day, 'PM') ? 'bg-blue-100 ring-2 ring-blue-400 z-10 relative' : ''"
+              :class="getCellClasses(person, day, 'PM')"
             >
               <select
                 :value="store.schedule?.data[person][day].PM || ''"
-                class="text-xs px-1 border-0 bg-transparent h-10 w-full cursor-pointer focus:outline-none hover:bg-gray-50/50 focus:ring-0"
+                class="text-xs text-inherit px-1 border-0 bg-transparent h-10 w-full cursor-pointer focus:outline-none focus:ring-0"
                 @change="handleTaskChange(person, day, 'PM', $event)"
               >
-                <option value="">
+                <option value="" class="text-gray-900 font-normal">
                   未设置
                 </option>
                 <option
@@ -134,6 +171,7 @@ function isHighlighted(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM'): 
                   :key="task.name"
                   :value="task.name"
                   :disabled="isTaskDisabled(task, 'PM')"
+                  class="text-gray-900 font-normal"
                 >
                   {{ task.name }}
                 </option>

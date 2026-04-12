@@ -49,7 +49,12 @@ function getNextDay(day: DayOfWeek): DayOfWeek | null {
   const idx = DAYS.indexOf(day)
   return idx < DAYS.length - 1 ? DAYS[idx + 1]! : null
 }
-export function generateSchedule(currentSchedule: WeekSchedule, activeRules: string[]): WeekSchedule | null {
+export interface ScheduleGroup {
+  diff: number
+  schedules: WeekSchedule[]
+}
+
+export function generateSchedule(currentSchedule: WeekSchedule, activeRules: string[]): ScheduleGroup[] | null {
   const context = getPrevWeekContext(currentSchedule.weekStartDate)
 
   const isManual = (person: StaffName, day: DayOfWeek, period: 'AM' | 'PM'): boolean => {
@@ -57,7 +62,9 @@ export function generateSchedule(currentSchedule: WeekSchedule, activeRules: str
   }
 
   const restDaysConfig = currentSchedule.restDays || { 朱克捷: 2, 高琪: 2, 李敏欣: 2, 杨秀芬: 2 }
-  const MAX_ATTEMPTS = 1000
+  const MAX_ATTEMPTS = 2000
+
+  const diffMap = new Map<number, Set<string>>()
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const newSchedule: WeekSchedule = JSON.parse(JSON.stringify(currentSchedule))
@@ -65,8 +72,46 @@ export function generateSchedule(currentSchedule: WeekSchedule, activeRules: str
       for (const p of STAFF) {
         delete (newSchedule as any)[`_rest_${p}`]
       }
-      return newSchedule // 不再追求绝对均衡，只要能排通立即返回，极速完成。
+
+      let maxW = 0
+      let minW = Infinity
+      for (const p of STAFF) {
+        let w = 0
+        for (const d of DAYS) {
+          const am = newSchedule.data[p][d].AM
+          const pm = newSchedule.data[p][d].PM
+          if (am && TASKS[am])
+            w += TASKS[am].weight
+          if (pm && TASKS[pm])
+            w += TASKS[pm].weight
+        }
+        maxW = Math.max(maxW, w)
+        minW = Math.min(minW, w)
+      }
+      const diff = Number((maxW - minW).toFixed(1))
+
+      // 差值最大允许为 2.0，将所有合法的组合按差值分组记录并去重
+      if (diff <= 2.0) {
+        if (!diffMap.has(diff)) {
+          diffMap.set(diff, new Set<string>())
+        }
+        diffMap.get(diff)!.add(JSON.stringify(newSchedule))
+      }
     }
+  }
+
+  if (diffMap.size > 0) {
+    const result: ScheduleGroup[] = []
+    const sortedDiffs = Array.from(diffMap.keys()).sort((a, b) => a - b)
+
+    for (const diff of sortedDiffs) {
+      const uniqueArr = Array.from(diffMap.get(diff)!)
+      result.push({
+        diff,
+        schedules: uniqueArr.map(str => JSON.parse(str)),
+      })
+    }
+    return result
   }
 
   return null
@@ -91,7 +136,7 @@ function getCombinations<T>(arr: T[], k: number): T[][] {
       return
     }
     for (let i = start; i < arr.length; i++) {
-      current.push(arr[i]!)
+      current.push(arr[i])
       dfs(i + 1, current)
       current.pop()
     }
@@ -323,16 +368,7 @@ function tryGenerate(
     }
   }
 
-  // 6. Fill blanks safely
-  for (const p of STAFF) {
-    for (const d of DAYS) {
-      if (schedule.data[p][d].AM === '')
-        schedule.data[p][d].AM = Math.random() > 0.5 ? '电话' : '筛查'
-      if (schedule.data[p][d].PM === '')
-        schedule.data[p][d].PM = Math.random() > 0.5 ? '电话' : '筛查'
-    }
-  }
-
+  // 留白处理：不再使用随机任务强制填补空位，所有剩余槽位保留为 ''（即"未设置"），用于预留门诊。
   return validateSchedule(schedule, context, isManual, activeRules, restDaysConfig)
 }
 
@@ -399,7 +435,8 @@ function validateSchedule(
         if (schedule.data[p][d].AM === '筛查' || schedule.data[p][d].PM === '筛查')
           shaichaCount++
       }
-      if (dianhuaCount < 1 || shaichaCount < 1)
+      // 要求绝对等于1
+      if (dianhuaCount !== 1 || shaichaCount !== 1)
         return false
     }
 
@@ -409,8 +446,7 @@ function validateSchedule(
       const am = schedule.data[p][d].AM
       const pm = schedule.data[p][d].PM
 
-      if (am === '' || pm === '')
-        return false
+      // 绝不可出现半天休假的情况（除非手动安排，否则算法生成禁止）
       if ((am === '休假') !== (pm === '休假'))
         return false
 

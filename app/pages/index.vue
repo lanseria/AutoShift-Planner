@@ -12,11 +12,17 @@ onMounted(() => {
 })
 
 function handleAutoGenerate() {
-  const success = store.autoGenerate()
-  if (success)
-    toast.success('自动排班成功！')
+  const res = store.autoGenerate()
+  if (res.success)
+    toast.success(res.msg)
   else
-    toast.error('条件过于严苛或已被手动任务占满，无法完全自动生成，请手动微调或减少预排任务。')
+    toast.error(res.msg)
+}
+
+function handleApplyGenerated(sch: any) {
+  store.applyGenerated(sch)
+  toast.success('已应用所选排班方案！')
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 function handleSave() {
@@ -116,6 +122,50 @@ function handleResetKeepClinic() {
             </div>
             <div class="p-6">
               <ScheduleTable />
+            </div>
+          </div>
+
+          <!-- Generated Candidates -->
+          <div v-if="store.generatedResults" class="mt-8 animate-fade-in space-y-6">
+            <div class="pb-3 border-b border-gray-200 flex items-center justify-between">
+              <h2 class="text-2xl text-gray-900 font-bold">
+                可选排班方案
+              </h2>
+              <button
+                class="text-sm text-gray-500 font-medium px-3 py-1.5 rounded-lg bg-gray-100 transition-colors hover:text-gray-800 hover:bg-gray-200"
+                @click="store.clearGenerated()"
+              >
+                取消选择
+              </button>
+            </div>
+
+            <div v-for="group in store.generatedResults" :key="group.diff" class="space-y-4">
+              <h3 class="text-lg text-gray-800 font-semibold flex gap-3 items-center">
+                <span class="text-sm text-amber-800 font-bold px-2.5 py-1 rounded-md bg-amber-100 shadow-sm">差值 {{ group.diff.toFixed(1) }}</span>
+                <span class="text-sm text-gray-500 font-normal">该差值下共有 {{ group.schedules.length }} 种方案</span>
+              </h3>
+
+              <div class="ml-2 pl-2 border-l-2 border-amber-100 gap-6 grid grid-cols-1">
+                <div
+                  v-for="(sch, idx) in group.schedules"
+                  :key="idx"
+                  class="group/item border border-blue-200 rounded-lg bg-white cursor-pointer shadow-sm transition-shadow relative overflow-hidden hover:shadow-md"
+                  @click="handleApplyGenerated(sch)"
+                >
+                  <div class="bg-blue-500/0 flex transition-colors items-center inset-0 justify-center absolute z-20 group-hover/item:bg-blue-500/5">
+                    <div class="text-white font-medium px-6 py-2 rounded-full bg-blue-600 opacity-0 shadow-lg scale-95 transform transition-all group-hover/item:opacity-100 group-hover/item:scale-100">
+                      点击应用此排班
+                    </div>
+                  </div>
+                  <div class="text-sm text-blue-800 font-medium px-4 py-2 border-b border-blue-100 bg-blue-50 flex items-center justify-between">
+                    <span>方案 {{ idx + 1 }}</span>
+                    <span class="text-xs text-blue-600 font-normal opacity-70">点击表格覆盖当前排班</span>
+                  </div>
+                  <div class="p-4 pointer-events-none">
+                    <ScheduleReadOnly :schedule="sch" />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
