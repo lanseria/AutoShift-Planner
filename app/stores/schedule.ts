@@ -181,6 +181,52 @@ export const useScheduleStore = defineStore('schedule', () => {
     }
   }
 
+  function checkFeasibility() {
+    if (!schedule.value)
+      return { status: 'error', remaining: 0, msg: '没有排班表' }
+
+    // 1. 计算休假占据的槽位 (每天2个半天槽)
+    let restSlots = 0
+    const restConfig = schedule.value.restDays || { 组长: 2, 成员A: 2, 成员B: 2, 成员C: 2 }
+    for (const p of STAFF) restSlots += (restConfig[p] || 0) * 2
+
+    // 2. 根据开启的规则，计算必排任务所需的槽位
+    let ruleSlots = 0
+    if (activeRules.value.includes('daily_basic'))
+      ruleSlots += 3 * 7 // 每天3个
+    if (activeRules.value.includes('fixed_tasks'))
+      ruleSlots += 3 // 周四2+周六1
+    if (activeRules.value.includes('dept_mandatory'))
+      ruleSlots += 2 // 运动1+舌苔1
+    if (activeRules.value.includes('personal_mandatory'))
+      ruleSlots += STAFF.length * 2 // 每人2个
+
+    // 3. 统计当前手动填入的门诊数量
+    let clinicCount = 0
+    for (const p of STAFF) {
+      for (const d of DAYS) {
+        if (schedule.value.data[p][d].AM === '门诊')
+          clinicCount++
+        if (schedule.value.data[p][d].PM === '门诊')
+          clinicCount++
+      }
+    }
+
+    const totalSlots = STAFF.length * DAYS.length * 2 // 56个槽位
+    const required = restSlots + ruleSlots + clinicCount
+    const remaining = totalSlots - required
+
+    if (remaining < 0) {
+      return { status: 'excess', remaining, msg: `门诊安排过多（超出 ${-remaining} 个槽位），不可能排班成功，请减少门诊。` }
+    }
+    else if (remaining > 0) {
+      return { status: 'short', remaining, msg: `门诊少了，排班后预计会出现 ${remaining} 个未设置。` }
+    }
+    else {
+      return { status: 'ok', remaining, msg: `门诊数量刚好，槽位完美匹配。` }
+    }
+  }
+
   async function autoGenerate(): Promise<{ success: boolean, msg: string }> {
     if (!schedule.value)
       return { success: false, msg: '没有排班表' }
@@ -232,5 +278,6 @@ export const useScheduleStore = defineStore('schedule', () => {
     clearGenerated,
     progress,
     isGenerating,
+    checkFeasibility,
   }
 })

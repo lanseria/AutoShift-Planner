@@ -12,6 +12,28 @@ onMounted(() => {
 })
 
 async function handleAutoGenerate() {
+  // 1. 先进行槽位预校验
+  const checkRes = store.checkFeasibility()
+  if (checkRes.status === 'error') {
+    toast.error(checkRes.msg)
+    return
+  }
+
+  if (checkRes.status === 'excess') {
+    // 门诊过多，直接拦截阻断算法运行
+    toast.error(checkRes.msg)
+    return
+  }
+  else if (checkRes.status === 'short') {
+    // 有空位，提示信息但不阻断
+    toast.success(checkRes.msg)
+  }
+  else {
+    // 刚好，正常提示
+    toast.success(checkRes.msg)
+  }
+
+  // 2. 校验通过，执行排班算法
   const res = await store.autoGenerate()
   if (res.success)
     toast.success(res.msg)
