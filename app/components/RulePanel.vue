@@ -15,14 +15,14 @@ const rules: Rule[] = [
   { key: 'dept_mandatory', label: '部门必排', desc: '每周整个团队需完成 1次运动处方、1次舌苔评估', tasks: ['运动处方', '舌苔评估'] },
   { key: 'fixed_tasks', label: '固定任务', desc: '周四下午 2人、周六下午 1人 负责群石墨修改', tasks: ['群石墨修改'] },
   { key: 'personal_mandatory', label: '个人必排', desc: '每个人每周只能排 1次电话、1次筛查，不能多不能少', tasks: ['电话', '筛查'] },
-  { key: 'consecutive_rest', label: '连休规则', desc: '每人每周必须有2天全天休息 (连续2天，或周一+周日跨周)', tasks: ['休假', ''] },
+  { key: 'consecutive_rest', label: '连休规则', desc: '每人每周必须有2天全天休息 (连续2天，或周一+周日跨周)', tasks: ['休假'] },
   { key: 'night_fatigue', label: '夜班防疲劳', desc: '排 随访夜 后，次日上午不能排随访上午、舌苔评估和门诊', tasks: ['随访夜', '随访上午', '舌苔评估', '门诊'] },
   { key: 'am_fatigue', label: '上午防疲劳', desc: '门诊、随访上午、舌苔评估 不可连续两天排在上午', tasks: ['门诊', '随访上午', '舌苔评估'] },
 ]
 </script>
 
 <template>
-  <div class="mt-6 border border-gray-200 rounded-lg bg-white w-full overflow-hidden">
+  <div class="border border-gray-200 rounded-lg bg-white w-full overflow-hidden">
     <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
       <h3 class="text-lg text-gray-900 font-semibold flex gap-2 items-center">
         <div class="i-carbon-rule text-blue-500" />

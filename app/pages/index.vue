@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { calculateWorkload } from '~/utils/schedule'
+
 definePageMeta({
   layout: 'home',
 })
@@ -163,6 +165,9 @@ function handleVerifyRules() {
             </div>
             <div class="p-6">
               <ScheduleTable />
+              <div class="mt-4">
+                <WorkloadDashboard :workload="store.workload" />
+              </div>
               <!-- Progress Bar -->
               <div v-if="store.isGenerating" class="mt-4">
                 <div class="mb-1 flex items-center justify-between">
@@ -218,6 +223,9 @@ function handleVerifyRules() {
                   </div>
                   <div class="p-4 pointer-events-none">
                     <ScheduleReadOnly :schedule="sch" />
+                    <div class="mt-3">
+                      <WorkloadDashboard :workload="calculateWorkload(sch, store.taskConfigs)" />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -226,7 +234,6 @@ function handleVerifyRules() {
         </div>
 
         <div class="lg:col-span-1">
-          <WorkloadDashboard />
           <RulePanel />
         </div>
       </div>
