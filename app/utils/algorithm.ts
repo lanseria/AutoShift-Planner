@@ -74,14 +74,8 @@ function getScheduleSignature(schedule: WeekSchedule): string {
   return `${leaderData}|${memberSchedules.join('||')}`
 }
 
-/**
- * 搜索上限建议：
- * 5,000: 极速平衡
- * 15,000: 深度搜索，能覆盖大部分本质不同的方案
- * 300,000: 深度穷举（需配合 Web Worker 使用，避免阻塞 UI）
- */
-// 优化后单次搜索效率极高，30万次即可覆盖极大量优质、本质不同的均衡方案
-const MAX_ATTEMPTS = 300000
+// 优化后单次搜索效率极高，60万次即可覆盖极大量优质、本质不同的均衡方案
+const MAX_ATTEMPTS = 600000
 const PROGRESS_INTERVAL = Math.max(1, Math.floor(MAX_ATTEMPTS / 100))
 
 // 提速补丁：取代极慢的 JSON.parse(JSON.stringify)

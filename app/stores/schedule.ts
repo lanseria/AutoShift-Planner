@@ -99,7 +99,7 @@ export const useScheduleStore = defineStore('schedule', () => {
 
   function applyGenerated(sch: WeekSchedule) {
     schedule.value = JSON.parse(JSON.stringify(sch))
-    clearGenerated()
+    // clearGenerated()
   }
 
   function updateTask(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM' | 'NIGHT', task: TaskName) {
@@ -245,20 +245,34 @@ export const useScheduleStore = defineStore('schedule', () => {
     if (!schedule.value)
       return { success: false, msg: '没有排班表' }
 
+    // 创建一个仅包含门诊的排班表副本作为算法基线
+    // 将其他所有任务视为空，以便重新生成时不被当前界面上的旧方案残留数据干扰
+    const baseSchedule = JSON.parse(JSON.stringify(schedule.value)) as WeekSchedule
+    for (const p of STAFF) {
+      for (const d of DAYS) {
+        if (baseSchedule.data[p][d].AM !== '门诊')
+          baseSchedule.data[p][d].AM = ''
+        if (baseSchedule.data[p][d].PM !== '门诊')
+          baseSchedule.data[p][d].PM = ''
+        if (baseSchedule.data[p][d].NIGHT !== '门诊')
+          baseSchedule.data[p][d].NIGHT = ''
+      }
+    }
+
     const context = getPrevWeekContext(schedule.value.weekStartDate)
-    const resultGroups = await runWorker(schedule.value, activeRules.value, context, taskConfigs.value)
+    const resultGroups = await runWorker(baseSchedule, activeRules.value, context, taskConfigs.value)
     if (resultGroups && resultGroups.length > 0) {
       generatedResults.value = resultGroups
       const totalSchedules = resultGroups.reduce((acc, g) => acc + g.schedules.length, 0)
       return {
         success: true,
-        msg: `生成成功！共找到 ${totalSchedules} 种排班方案，已按工作量差值从小到大排序。`,
+        msg: `生成成功！已为您筛选出最优的 ${totalSchedules} 种排班方案，按工作量差值从小到大排列。`,
       }
     }
 
     return {
       success: false,
-      msg: '条件过于严苛或已被手动任务占满，无法找到工作量差值 ≤ 2.0 的合法排班。请微调或取消部分规则。',
+      msg: '条件存在冲突或可用槽位已被门诊/休假占满，无法生成任何合法排班。请放宽限制或取消部分规则。',
     }
   }
 
