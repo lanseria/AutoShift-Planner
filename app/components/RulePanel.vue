@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import type { TaskName } from '~/types/schedule'
+import { ref } from 'vue'
 
 const store = useScheduleStore()
+const isTaskConfigOpen = ref(false)
 
 interface Rule {
   key: string
@@ -28,6 +30,13 @@ const rules: Rule[] = [
         <div class="i-carbon-rule text-blue-500" />
         排班规则说明
       </h3>
+      <button
+        class="text-sm text-gray-700 font-medium px-3 py-1.5 border border-gray-200 rounded-lg inline-flex gap-1.5 transition-colors items-center hover:bg-gray-50"
+        @click="isTaskConfigOpen = true"
+      >
+        <div class="i-carbon-settings text-sm" />
+        <span class="hidden sm:inline">任务配置</span>
+      </button>
     </div>
     <div class="p-2">
       <div class="flex flex-col gap-1">
@@ -69,4 +78,5 @@ const rules: Rule[] = [
       </div>
     </div>
   </div>
+  <TaskConfigModal v-model="isTaskConfigOpen" />
 </template>

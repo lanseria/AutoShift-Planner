@@ -75,7 +75,7 @@ function getScheduleSignature(schedule: WeekSchedule): string {
 }
 
 // 优化后单次搜索效率极高，60万次即可覆盖极大量优质、本质不同的均衡方案
-const MAX_ATTEMPTS = 600000
+const MAX_ATTEMPTS = 300000
 const PROGRESS_INTERVAL = Math.max(1, Math.floor(MAX_ATTEMPTS / 100))
 
 // 提速补丁：取代极慢的 JSON.parse(JSON.stringify)
@@ -108,6 +108,7 @@ export function generateScheduleCore(
   const restDaysConfig = currentSchedule.restDays || { 组长: 1, 成员A: 2, 成员B: 2, 成员C: 2 }
 
   const diffGroups = new Map<number, Map<string, WeekSchedule>>()
+  let uniqueValidSchedulesCount = 0
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const newSchedule: WeekSchedule = fastCloneSchedule(currentSchedule)
@@ -126,37 +127,117 @@ export function generateScheduleCore(
         }
       }
 
-      // 计算工作量差值（仅限成员）
-      const memberWorkloads: number[] = []
-      for (const p of STAFF) {
-        if (p === '组长')
-          continue
-        let w = 0
-        for (const d of DAYS) {
-          const am = newSchedule.data[p][d].AM
-          const pm = newSchedule.data[p][d].PM
-          const night = newSchedule.data[p][d].NIGHT
-          if (am && taskConfigs[am])
-            w += taskConfigs[am].weight
-          if (pm && taskConfigs[pm])
-            w += taskConfigs[pm].weight
-          if (night && taskConfigs[night])
-            w += taskConfigs[night].weight
-        }
-        memberWorkloads.push(w)
-      }
-      const diff = Number((Math.max(...memberWorkloads) - Math.min(...memberWorkloads)).toFixed(1))
+      // === 新增：局部搜索优化 (Hill Climbing 爬山算法) ===
+      // 在贪心算法找到合法基线方案后，立刻通过同位替换（Swap）来极限压平工作量差值
+      let maxOptAttempts = 50 // 防止极端情况死循环
 
-      // 生成方案的唯一特征签名（排除ABC互换干扰）
+      const getWl = (sch: WeekSchedule) => {
+        const wl = { 组长: 0, 成员A: 0, 成员B: 0, 成员C: 0 }
+        for (const p of STAFF) {
+          for (const d of DAYS) {
+            const am = sch.data[p][d].AM; if (am && taskConfigs[am])
+              wl[p] += taskConfigs[am].weight
+            const pm = sch.data[p][d].PM; if (pm && taskConfigs[pm])
+              wl[p] += taskConfigs[pm].weight
+            const night = sch.data[p][d].NIGHT; if (night && taskConfigs[night])
+              wl[p] += taskConfigs[night].weight
+          }
+        }
+        return wl
+      }
+
+      const getMemberDiff = (wl: Record<StaffName, number>) => {
+        const vals = [wl['成员A'], wl['成员B'], wl['成员C']]
+        return Number((Math.max(...vals) - Math.min(...vals)).toFixed(1))
+      }
+
+      // 将嵌套循环提取为函数，用 return true 替代 break 标签
+      const findAndApplySwap = (): boolean => {
+        const wl = getWl(newSchedule)
+        const currentDiff = getMemberDiff(wl)
+
+        if (currentDiff <= 0.1)
+          return false // 已达到完美均衡，无需再优化
+
+        for (let i = 0; i < STAFF.length; i++) {
+          for (let j = 0; j < STAFF.length; j++) {
+            if (i === j)
+              continue
+            const p1 = STAFF[i]!
+            const p2 = STAFF[j]!
+
+            // 核心思路：工作量大的人，把重任务抛给工作量小的人
+            if (wl[p1] <= wl[p2])
+              continue
+
+            for (const d of DAYS) {
+              for (const period of ['AM', 'PM', 'NIGHT'] as const) {
+                // 不能交换用户手动锁定的排班（如门诊）
+                if (isManual(p1, d, period) || isManual(p2, d, period))
+                  continue
+
+                const t1 = newSchedule.data[p1][d][period]
+                const t2 = newSchedule.data[p2][d][period]
+                if (t1 === t2)
+                  continue
+
+                const w1 = t1 && taskConfigs[t1] ? taskConfigs[t1].weight : 0
+                const w2 = t2 && taskConfigs[t2] ? taskConfigs[t2].weight : 0
+
+                // 只有当 p1 给出的任务比 p2 给回的任务重时才交换，确保 p1 工作量下降
+                if (w1 <= w2)
+                  continue
+
+                // 尝试交换任务
+                newSchedule.data[p1][d][period] = t2
+                newSchedule.data[p2][d][period] = t1
+
+                // 验证交换后是否破坏了任何防疲劳或冲突规则
+                if (validateSchedule(newSchedule, context, isManual, activeRules, restDaysConfig, taskConfigs)) {
+                  const newWl = getWl(newSchedule)
+                  const newDiff = getMemberDiff(newWl)
+
+                  // 只有当成员差值严格缩小时，才永久保留此次交换并立即返回
+                  if (newDiff < currentDiff - 0.05) {
+                    return true
+                  }
+                }
+
+                // 若规则不通过或未改善差值，则撤销交换
+                newSchedule.data[p1][d][period] = t1
+                newSchedule.data[p2][d][period] = t2
+              }
+            }
+          }
+        }
+        return false // 没有找到任何能够降低差值的交换
+      }
+
+      // 执行爬山优化
+      while (maxOptAttempts-- > 0) {
+        const improved = findAndApplySwap()
+        if (!improved)
+          break
+      }
+      // === 局部搜索优化结束 ===
+
+      // 获取优化后的最终差值
+      const finalWl = getWl(newSchedule)
+      const diff = getMemberDiff(finalWl)
       const signature = getScheduleSignature(newSchedule)
 
       if (!diffGroups.has(diff)) {
         diffGroups.set(diff, new Map())
       }
 
-      // 如果该差值下还没有这个”本质不同”的方案，则记录
       if (!diffGroups.get(diff)!.has(signature)) {
         diffGroups.get(diff)!.set(signature, newSchedule)
+        uniqueValidSchedulesCount++
+      }
+
+      // 提速补丁：当搜集到 300 个极致优化的无重复极品方案时，提前终止尝试。
+      if (uniqueValidSchedulesCount >= 300) {
+        break
       }
     }
 

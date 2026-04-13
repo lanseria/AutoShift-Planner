@@ -7,7 +7,54 @@ definePageMeta({
 
 const store = useScheduleStore()
 const toast = useToast()
-const isTaskConfigOpen = ref(false)
+
+const fileInput = ref<HTMLInputElement | null>(null)
+
+function handleImportJSON() {
+  fileInput.value?.click()
+}
+
+function onFileChange(e: Event) {
+  const target = e.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file)
+    return
+
+  const reader = new FileReader()
+  reader.onload = (evt) => {
+    try {
+      const result = evt.target?.result as string
+      const parsed = JSON.parse(result)
+      // 简单校验数据结构
+      if (!parsed.weekStartDate || !parsed.data || !parsed.data['组长']) {
+        throw new Error('无效的排班表数据格式')
+      }
+      store.applyGenerated(parsed)
+      toast.success('排班表导入成功！')
+    }
+    catch (err: any) {
+      toast.error(`导入失败：${err.message}`)
+    }
+    finally {
+      target.value = ''
+    }
+  }
+  reader.readAsText(file)
+}
+
+function handleExportJSON() {
+  if (!store.schedule)
+    return
+  const data = JSON.stringify(store.schedule, null, 2)
+  const blob = new Blob([data], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `schedule_${store.schedule.weekStartDate}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+  toast.success('排班表已导出！')
+}
 
 onMounted(() => {
   store.loadWeek()
@@ -138,12 +185,26 @@ function handleVerifyRules() {
                   <div class="i-carbon-spell-check text-sm" />
                   <span class="hidden sm:inline">校验规则</span>
                 </button>
+                <input
+                  ref="fileInput"
+                  type="file"
+                  accept=".json"
+                  class="hidden"
+                  @change="onFileChange"
+                >
                 <button
                   class="text-sm text-gray-700 font-medium px-3 py-1.5 border border-gray-200 rounded-lg inline-flex gap-1.5 transition-colors items-center hover:bg-gray-50"
-                  @click="isTaskConfigOpen = true"
+                  @click="handleImportJSON"
                 >
-                  <div class="i-carbon-settings text-sm" />
-                  <span class="hidden sm:inline">任务配置</span>
+                  <div class="i-carbon-document-import text-sm" />
+                  <span class="hidden sm:inline">导入</span>
+                </button>
+                <button
+                  class="text-sm text-gray-700 font-medium px-3 py-1.5 border border-gray-200 rounded-lg inline-flex gap-1.5 transition-colors items-center hover:bg-gray-50"
+                  @click="handleExportJSON"
+                >
+                  <div class="i-carbon-document-export text-sm" />
+                  <span class="hidden sm:inline">导出</span>
                 </button>
                 <button
                   class="text-sm text-gray-700 font-medium px-3 py-1.5 border border-gray-200 rounded-lg inline-flex gap-1.5 transition-colors items-center hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -241,6 +302,5 @@ function handleVerifyRules() {
 
     <WeekendAlert />
     <ToastContainer />
-    <TaskConfigModal v-model="isTaskConfigOpen" />
   </div>
 </template>
