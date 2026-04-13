@@ -74,7 +74,7 @@ function getScheduleSignature(schedule: WeekSchedule): string {
   return `${leaderData}|${memberSchedules.join('||')}`
 }
 
-// 优化后单次搜索效率极高，60万次即可覆盖极大量优质、本质不同的均衡方案
+// 优化后单次搜索效率极高，30万次即可覆盖极大量优质、本质不同的均衡方案
 const MAX_ATTEMPTS = 300000
 const PROGRESS_INTERVAL = Math.max(1, Math.floor(MAX_ATTEMPTS / 100))
 
