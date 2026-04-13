@@ -8,6 +8,7 @@ export const isEmptyOrRest = (task: TaskName): boolean => task === '' || task ==
 export interface PrevWeekContext {
   sundayAM: Record<StaffName, TaskName>
   sundayPM: Record<StaffName, TaskName>
+  sundayNIGHT: Record<StaffName, TaskName>
   saturdayEmpty: Record<StaffName, boolean>
   sundayEmpty: Record<StaffName, boolean>
 }
@@ -19,6 +20,7 @@ export function getPrevWeekContext(weekStartDate: string): PrevWeekContext {
   const context = {
     sundayAM: {} as Record<StaffName, TaskName>,
     sundayPM: {} as Record<StaffName, TaskName>,
+    sundayNIGHT: {} as Record<StaffName, TaskName>,
     saturdayEmpty: {} as Record<StaffName, boolean>,
     sundayEmpty: {} as Record<StaffName, boolean>,
   }
@@ -29,8 +31,9 @@ export function getPrevWeekContext(weekStartDate: string): PrevWeekContext {
 
     context.sundayAM[person] = sun.AM
     context.sundayPM[person] = sun.PM
-    context.saturdayEmpty[person] = isEmptyOrRest(sat.AM) && isEmptyOrRest(sat.PM)
-    context.sundayEmpty[person] = isEmptyOrRest(sun.AM) && isEmptyOrRest(sun.PM)
+    context.sundayNIGHT[person] = sun.NIGHT
+    context.saturdayEmpty[person] = isEmptyOrRest(sat.AM) && isEmptyOrRest(sat.PM) && isEmptyOrRest(sat.NIGHT)
+    context.sundayEmpty[person] = isEmptyOrRest(sun.AM) && isEmptyOrRest(sun.PM) && isEmptyOrRest(sun.NIGHT)
   }
 
   return context
@@ -87,7 +90,7 @@ function fastCloneSchedule(base: WeekSchedule): WeekSchedule {
   for (const p of STAFF) {
     newData[p] = {}
     for (const d of DAYS) {
-      newData[p][d] = { AM: base.data[p][d].AM, PM: base.data[p][d].PM }
+      newData[p][d] = { AM: base.data[p][d].AM, PM: base.data[p][d].PM, NIGHT: base.data[p][d].NIGHT }
     }
   }
   return {
@@ -103,7 +106,7 @@ export function generateScheduleCore(
   context: PrevWeekContext,
   onProgress?: (progress: number) => void,
 ): ScheduleGroup[] | null {
-  const isManual = (person: StaffName, day: DayOfWeek, period: 'AM' | 'PM'): boolean => {
+  const isManual = (person: StaffName, day: DayOfWeek, period: 'AM' | 'PM' | 'NIGHT'): boolean => {
     return currentSchedule.data[person][day][period] !== ''
   }
 
@@ -129,10 +132,13 @@ export function generateScheduleCore(
         for (const d of DAYS) {
           const am = newSchedule.data[p][d].AM
           const pm = newSchedule.data[p][d].PM
+          const night = newSchedule.data[p][d].NIGHT
           if (am && TASKS[am])
             w += TASKS[am].weight
           if (pm && TASKS[pm])
             w += TASKS[pm].weight
+          if (night && TASKS[night])
+            w += TASKS[night].weight
         }
         memberWorkloads.push(w)
       }
@@ -212,7 +218,7 @@ function getCombinations<T>(arr: T[], k: number): T[][] {
 function tryGenerate(
   schedule: WeekSchedule,
   context: PrevWeekContext,
-  isManual: (person: StaffName, day: DayOfWeek, period: 'AM' | 'PM') => boolean,
+  isManual: (person: StaffName, day: DayOfWeek, period: 'AM' | 'PM' | 'NIGHT') => boolean,
   activeRules: string[],
   restDaysConfig: Record<StaffName, number>,
 ): boolean {
@@ -226,6 +232,8 @@ function tryGenerate(
         currentWorkload[p] += TASKS[am].weight
       const pm = schedule.data[p][d].PM; if (pm && TASKS[pm])
         currentWorkload[p] += TASKS[pm].weight
+      const night = schedule.data[p][d].NIGHT; if (night && TASKS[night])
+        currentWorkload[p] += TASKS[night].weight
     }
   }
 
@@ -241,7 +249,7 @@ function tryGenerate(
     return chosen
   }
 
-  const pickSlot = (slots: { p: StaffName, d: DayOfWeek, period: 'AM' | 'PM' }[], taskWeight: number) => {
+  const pickSlot = (slots: { p: StaffName, d: DayOfWeek, period: 'AM' | 'PM' | 'NIGHT' }[], taskWeight: number) => {
     if (slots.length === 0)
       return null
     slots.sort((a, b) => currentWorkload[a.p] - currentWorkload[b.p])
@@ -280,15 +288,20 @@ function tryGenerate(
         const isRestDay = pat.includes(d)
         const am = schedule.data[p][d].AM
         const pm = schedule.data[p][d].PM
+        const night = schedule.data[p][d].NIGHT
         const manualAM = isManual(p, d, 'AM')
         const manualPM = isManual(p, d, 'PM')
+        const manualNIGHT = isManual(p, d, 'NIGHT')
 
         if (isRestDay) {
-          if ((manualAM && am !== '休假' && am !== '') || (manualPM && pm !== '休假' && pm !== ''))
+          if ((manualAM && am !== '休假' && am !== '')
+            || (manualPM && pm !== '休假' && pm !== '')
+            || (manualNIGHT && night !== '休假' && night !== '')) {
             valid = false
+          }
         }
         else {
-          if ((manualAM && am === '休假') || (manualPM && pm === '休假'))
+          if ((manualAM && am === '休假') || (manualPM && pm === '休假') || (manualNIGHT && night === '休假'))
             valid = false
         }
       }
@@ -307,6 +320,8 @@ function tryGenerate(
         schedule.data[p][d].AM = '休假'
       if (!isManual(p, d, 'PM'))
         schedule.data[p][d].PM = '休假'
+      if (!isManual(p, d, 'NIGHT'))
+        schedule.data[p][d].NIGHT = '休假'
     }
   }
 
@@ -314,6 +329,7 @@ function tryGenerate(
   // 计算每天剩余可排班人手，若遭遇必然失败的瓶颈直接舍弃，节省巨量时间
   const availAM: Record<DayOfWeek, number> = { Monday: 0, Tuesday: 0, Wednesday: 0, Thursday: 0, Friday: 0, Saturday: 0, Sunday: 0 }
   const availPM: Record<DayOfWeek, number> = { ...availAM }
+  const availNIGHT: Record<DayOfWeek, number> = { ...availAM }
 
   for (const d of DAYS) {
     for (const p of STAFF) {
@@ -323,26 +339,32 @@ function tryGenerate(
           availAM[d]++
         if (!isManual(p, d, 'PM') || schedule.data[p][d].PM === '')
           availPM[d]++
+        if (!isManual(p, d, 'NIGHT') || schedule.data[p][d].NIGHT === '')
+          availNIGHT[d]++
       }
     }
   }
 
-  if (hasRule('daily_basic')) {
-    for (const d of DAYS) {
-      // 每日基础至少需要 1个上午槽位(随访), 2个下午槽位(随访、基础)
-      if (availAM[d] < 1 || availPM[d] < 2)
-        return false
+  // 根据开启的规则，计算每天各个时段最低需要的总硬性槽位
+  for (const d of DAYS) {
+    let reqAM = 0; let reqPM = 0; let reqNIGHT = 0
+    if (hasRule('daily_basic')) {
+      reqAM += 1; reqPM += 2; reqNIGHT += 1
+    }
+    if (hasRule('fixed_tasks')) {
+      if (d === 'Thursday')
+        reqPM += 2
+      if (d === 'Saturday')
+        reqPM += 1
+    }
+    // 叠加后判断，若当天可用人手低于各规则叠加后的硬性要求，直接极速剪枝
+    if (availAM[d] < reqAM || availPM[d] < reqPM || availNIGHT[d] < reqNIGHT) {
+      return false
     }
   }
-  if (hasRule('fixed_tasks')) {
-    if (availPM.Thursday < 2)
-      return false // 突破周四下午瓶颈
-    if (availPM.Saturday < 1)
-      return false
-  }
 
-  const getAvailableSlots = (taskMatcher: (p: StaffName, d: DayOfWeek, period: 'AM' | 'PM') => boolean) => {
-    const slots: { p: StaffName, d: DayOfWeek, period: 'AM' | 'PM' }[] = []
+  const getAvailableSlots = (taskMatcher: (p: StaffName, d: DayOfWeek, period: 'AM' | 'PM' | 'NIGHT') => boolean) => {
+    const slots: { p: StaffName, d: DayOfWeek, period: 'AM' | 'PM' | 'NIGHT' }[] = []
     for (const p of STAFF) {
       const restDays = (schedule as any)[`_rest_${p}`] as DayOfWeek[]
       for (const d of DAYS) {
@@ -353,6 +375,9 @@ function tryGenerate(
         }
         if (!isManual(p, d, 'PM') && schedule.data[p][d].PM === '' && taskMatcher(p, d, 'PM')) {
           slots.push({ p, d, period: 'PM' })
+        }
+        if (!isManual(p, d, 'NIGHT') && schedule.data[p][d].NIGHT === '' && taskMatcher(p, d, 'NIGHT')) {
+          slots.push({ p, d, period: 'NIGHT' })
         }
       }
     }
@@ -390,7 +415,7 @@ function tryGenerate(
   // --- 4. 安排每日基础 (限制度较高) ---
   if (hasRule('daily_basic')) {
     for (const d of DAYS) {
-      const assignDaily = (task: TaskName, period: 'AM' | 'PM') => {
+      const assignDaily = (task: TaskName, period: 'AM' | 'PM' | 'NIGHT') => {
         if (STAFF.some(p => schedule.data[p][d][period] === task))
           return true
         const cands = STAFF.filter((p) => {
@@ -401,11 +426,28 @@ function tryGenerate(
           if (schedule.data[p][d][period] !== '')
             return false
 
+          // 校验同一个人一天不能同时出现随访上午、随访下午和随访夜。
+          // 注：因为8天休假分在7天，必有1天仅2人上班。这2人需承担3个随访，必有1人承担2个随访。
+          // 因此只能限制“不能一个人包揽3个随访”。
+          const isSuiFang = (t: string) => t === '随访上午' || t === '随访下午' || t === '随访夜'
+          if (isSuiFang(task)) {
+            let count = 0
+            if (isSuiFang(schedule.data[p][d].AM))
+              count++
+            if (isSuiFang(schedule.data[p][d].PM))
+              count++
+            if (isSuiFang(schedule.data[p][d].NIGHT))
+              count++
+            if (count >= 2) {
+              return false // 已经有2个随访了，禁止再接变成3个
+            }
+          }
+
           if (period === 'AM') {
             const prevDay = getPrevDay(d)
-            const prevPM = prevDay ? schedule.data[p][prevDay].PM : context.sundayPM[p]
+            const prevNIGHT = prevDay ? schedule.data[p][prevDay].NIGHT : context.sundayNIGHT[p]
             const prevAM = prevDay ? schedule.data[p][prevDay].AM : context.sundayAM[p]
-            if (hasRule('night_fatigue') && prevPM === '随访下午/夜')
+            if (hasRule('night_fatigue') && prevNIGHT === '随访夜')
               return false
             if (hasRule('am_fatigue') && isAMFatigueTask(prevAM) && isAMFatigueTask(task))
               return false
@@ -423,7 +465,9 @@ function tryGenerate(
 
       if (!assignDaily('随访上午', 'AM'))
         return false
-      if (!assignDaily('随访下午/夜', 'PM'))
+      if (!assignDaily('随访下午', 'PM'))
+        return false
+      if (!assignDaily('随访夜', 'NIGHT'))
         return false
       if (!assignDaily('基础班', 'PM'))
         return false
@@ -448,11 +492,11 @@ function tryGenerate(
           return false
         const prevDay = getPrevDay(d)
         const nextDay = getNextDay(d)
-        const prevPM = prevDay ? schedule.data[p][prevDay].PM : context.sundayPM[p]
+        const prevNIGHT = prevDay ? schedule.data[p][prevDay].NIGHT : context.sundayNIGHT[p]
         const prevAM = prevDay ? schedule.data[p][prevDay].AM : context.sundayAM[p]
         const nextAM = nextDay ? schedule.data[p][nextDay].AM : ('' as TaskName)
 
-        if (hasRule('night_fatigue') && prevPM === '随访下午/夜')
+        if (hasRule('night_fatigue') && prevNIGHT === '随访夜')
           return false
         if (hasRule('am_fatigue') && (isAMFatigueTask(prevAM) || isAMFatigueTask(nextAM)))
           return false
@@ -469,11 +513,11 @@ function tryGenerate(
   if (hasRule('personal_mandatory')) {
     for (const p of STAFF) {
       const assignPersonal = (task: TaskName) => {
-        if (DAYS.some(d => schedule.data[p][d].AM === task || schedule.data[p][d].PM === task))
+        if (DAYS.some(d => schedule.data[p][d].AM === task || schedule.data[p][d].PM === task || schedule.data[p][d].NIGHT === task))
           return true
-        let slots = getAvailableSlots((_p, d, _period) => _p === p && schedule.data[p][d].AM === '' && schedule.data[p][d].PM === '')
+        let slots = getAvailableSlots((_p, d, _period) => _p === p && _period !== 'NIGHT' && schedule.data[p][d].AM === '' && schedule.data[p][d].PM === '')
         if (slots.length === 0)
-          slots = getAvailableSlots((_p, _d, _period) => _p === p)
+          slots = getAvailableSlots((_p, _d, _period) => _p === p && _period !== 'NIGHT')
         if (slots.length === 0)
           return false
         // 针对单人的任务无需跨人均衡，直接随机安排
@@ -495,7 +539,7 @@ function tryGenerate(
 function validateSchedule(
   schedule: WeekSchedule,
   context: PrevWeekContext,
-  isManual: (person: StaffName, day: DayOfWeek, period: 'AM' | 'PM') => boolean,
+  isManual: (person: StaffName, day: DayOfWeek, period: 'AM' | 'PM' | 'NIGHT') => boolean,
   activeRules: string[],
   restDaysConfig: Record<StaffName, number>,
 ): boolean {
@@ -505,16 +549,31 @@ function validateSchedule(
     for (const d of DAYS) {
       let sfam = 0
       let sfpm = 0
+      let sfnight = 0
       let jc = 0
       for (const p of STAFF) {
         if (schedule.data[p][d].AM === '随访上午')
           sfam++
-        if (schedule.data[p][d].PM === '随访下午/夜')
+        if (schedule.data[p][d].PM === '随访下午')
           sfpm++
+        if (schedule.data[p][d].NIGHT === '随访夜')
+          sfnight++
         if (schedule.data[p][d].PM === '基础班')
           jc++
+
+        // 校验同一个人一天不能同时出现多个随访
+        const isSuiFang = (t: string) => t === '随访上午' || t === '随访下午' || t === '随访夜'
+        let suiFangCount = 0
+        if (isSuiFang(schedule.data[p][d].AM))
+          suiFangCount++
+        if (isSuiFang(schedule.data[p][d].PM))
+          suiFangCount++
+        if (isSuiFang(schedule.data[p][d].NIGHT))
+          suiFangCount++
+        if (suiFangCount > 2)
+          return false
       }
-      if (sfam !== 1 || sfpm !== 1 || jc !== 1)
+      if (sfam !== 1 || sfpm !== 1 || sfnight !== 1 || jc !== 1)
         return false
     }
   }
@@ -567,12 +626,15 @@ function validateSchedule(
     for (const d of DAYS) {
       const am = schedule.data[p][d].AM
       const pm = schedule.data[p][d].PM
+      const night = schedule.data[p][d].NIGHT
 
-      // 绝不可出现半天休假的情况（除非手动安排，否则算法生成禁止）
-      if ((am === '休假') !== (pm === '休假'))
+      // 绝不可出现部分休假的情况（除非手动安排，否则算法生成禁止）
+      const hasRest = am === '休假' || pm === '休假' || night === '休假'
+      const allRest = am === '休假' && pm === '休假' && night === '休假'
+      if (hasRest && !allRest)
         return false
 
-      if (am === '休假' && pm === '休假') {
+      if (allRest) {
         emptyDays++
         emptyDayList.push(d)
       }
@@ -592,15 +654,15 @@ function validateSchedule(
     }
 
     if (hasRule('night_fatigue')) {
-      if (context.sundayPM[p] === '随访下午/夜' && isAMFatigueTask(schedule.data[p].Monday.AM)) {
+      if (context.sundayNIGHT[p] === '随访夜' && isAMFatigueTask(schedule.data[p].Monday.AM)) {
         if (!isManual(p, 'Monday', 'AM'))
           return false
       }
       for (let i = 0; i < 6; i++) {
         const d = DAYS[i]!
         const nextD = DAYS[i + 1]!
-        if (schedule.data[p][d].PM === '随访下午/夜' && isAMFatigueTask(schedule.data[p][nextD].AM)) {
-          if (!isManual(p, d, 'PM') || !isManual(p, nextD, 'AM'))
+        if (schedule.data[p][d].NIGHT === '随访夜' && isAMFatigueTask(schedule.data[p][nextD].AM)) {
+          if (!isManual(p, d, 'NIGHT') || !isManual(p, nextD, 'AM'))
             return false
         }
       }

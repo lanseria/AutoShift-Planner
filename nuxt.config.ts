@@ -35,6 +35,9 @@ export default defineNuxtConfig({
   colorMode: {
     classSuffix: '',
   },
+  devServer: {
+    port: 30004,
+  },
 
   experimental: {
     // when using generate, payload js assets included in sw precache manifest
@@ -45,7 +48,6 @@ export default defineNuxtConfig({
   },
 
   compatibilityDate: '2024-08-14',
-
   nitro: {
     esbuild: {
       options: {

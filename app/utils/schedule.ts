@@ -5,7 +5,7 @@ import { DAYS, STAFF, TASKS } from '~/types/schedule'
 export function getEmptyPersonSchedule(): PersonSchedule {
   const schedule = {} as PersonSchedule
   for (const day of DAYS)
-    schedule[day] = { AM: '', PM: '' } as DaySchedule
+    schedule[day] = { AM: '', PM: '', NIGHT: '' } as DaySchedule
 
   return schedule
 }
@@ -36,8 +36,8 @@ export function loadSchedule(weekStartDate: string): WeekSchedule {
   if (stored) {
     try {
       const parsed = JSON.parse(stored) as WeekSchedule
-      // 兼容性处理：如果本地缓存还是旧名字，丢弃它
-      if (!parsed.data['组长']) {
+      // 严格校验新版数据结构，不兼容则直接丢弃重置（开发期暴力清理旧数据）
+      if (!parsed.data?.['组长']?.Monday || typeof parsed.data['组长'].Monday.NIGHT === 'undefined') {
         return getEmptyWeekSchedule(weekStartDate)
       }
       if (!parsed.restDays) {
@@ -64,10 +64,13 @@ export function calculateWorkload(schedule: WeekSchedule): Record<StaffName, num
     for (const day of DAYS) {
       const amTask = schedule.data[person][day].AM
       const pmTask = schedule.data[person][day].PM
+      const nightTask = schedule.data[person][day].NIGHT
       if (amTask)
         total += TASKS[amTask].weight
       if (pmTask)
         total += TASKS[pmTask].weight
+      if (nightTask)
+        total += TASKS[nightTask].weight
     }
     workload[person] = total
   }

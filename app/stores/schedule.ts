@@ -73,7 +73,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     clearGenerated()
   }
 
-  function updateTask(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM', task: TaskName) {
+  function updateTask(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM' | 'NIGHT', task: TaskName) {
     if (!schedule.value)
       return
     schedule.value.data[person][day][period] = task
@@ -97,6 +97,7 @@ export const useScheduleStore = defineStore('schedule', () => {
       for (const day of DAYS) {
         schedule.value.data[person][day].AM = ''
         schedule.value.data[person][day].PM = ''
+        schedule.value.data[person][day].NIGHT = ''
       }
     }
     clearGenerated()
@@ -111,6 +112,8 @@ export const useScheduleStore = defineStore('schedule', () => {
           schedule.value.data[person][day].AM = ''
         if (schedule.value.data[person][day].PM !== '门诊')
           schedule.value.data[person][day].PM = ''
+        if (schedule.value.data[person][day].NIGHT !== '门诊')
+          schedule.value.data[person][day].NIGHT = ''
       }
     }
     clearGenerated()
@@ -127,7 +130,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     let isEmpty = true
     for (const person of STAFF) {
       for (const day of DAYS) {
-        if (nextWeekSchedule.data[person][day].AM !== '' || nextWeekSchedule.data[person][day].PM !== '') {
+        if (nextWeekSchedule.data[person][day].AM !== '' || nextWeekSchedule.data[person][day].PM !== '' || nextWeekSchedule.data[person][day].NIGHT !== '') {
           isEmpty = false
           break
         }
@@ -185,15 +188,15 @@ export const useScheduleStore = defineStore('schedule', () => {
     if (!schedule.value)
       return { status: 'error', remaining: 0, msg: '没有排班表' }
 
-    // 1. 计算休假占据的槽位 (每天2个半天槽)
+    // 1. 计算休假占据的槽位 (每天3个槽)
     let restSlots = 0
     const restConfig = schedule.value.restDays || { 组长: 2, 成员A: 2, 成员B: 2, 成员C: 2 }
-    for (const p of STAFF) restSlots += (restConfig[p] || 0) * 2
+    for (const p of STAFF) restSlots += (restConfig[p] || 0) * 3
 
     // 2. 根据开启的规则，计算必排任务所需的槽位
     let ruleSlots = 0
     if (activeRules.value.includes('daily_basic'))
-      ruleSlots += 3 * 7 // 每天3个
+      ruleSlots += 4 * 7 // 每天4个
     if (activeRules.value.includes('fixed_tasks'))
       ruleSlots += 3 // 周四2+周六1
     if (activeRules.value.includes('dept_mandatory'))
@@ -209,10 +212,12 @@ export const useScheduleStore = defineStore('schedule', () => {
           clinicCount++
         if (schedule.value.data[p][d].PM === '门诊')
           clinicCount++
+        if (schedule.value.data[p][d].NIGHT === '门诊')
+          clinicCount++
       }
     }
 
-    const totalSlots = STAFF.length * DAYS.length * 2 // 56个槽位
+    const totalSlots = STAFF.length * DAYS.length * 3 // 84个槽位
     const required = restSlots + ruleSlots + clinicCount
     const remaining = totalSlots - required
 

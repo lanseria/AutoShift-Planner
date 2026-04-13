@@ -1,7 +1,8 @@
 export type TaskName
   = | '门诊'
     | '随访上午'
-    | '随访下午/夜'
+    | '随访下午'
+    | '随访夜'
     | '基础班'
     | '电话'
     | '筛查'
@@ -13,7 +14,7 @@ export type TaskName
 
 export interface TaskInfo {
   name: TaskName
-  period: 'AM' | 'PM' | 'ANY'
+  period: 'AM' | 'PM' | 'NIGHT' | 'ANY'
   type: 'MANUAL' | 'AUTO' | 'MANDATORY' | 'DEPT_MANDATORY' | 'FIXED'
   weight: number
 }
@@ -21,7 +22,8 @@ export interface TaskInfo {
 export const TASKS: Record<TaskName, TaskInfo> = {
   '门诊': { name: '门诊', period: 'ANY', type: 'MANUAL', weight: 1.0 },
   '随访上午': { name: '随访上午', period: 'AM', type: 'AUTO', weight: 1.0 },
-  '随访下午/夜': { name: '随访下午/夜', period: 'PM', type: 'AUTO', weight: 1.0 },
+  '随访下午': { name: '随访下午', period: 'PM', type: 'AUTO', weight: 0.4 },
+  '随访夜': { name: '随访夜', period: 'NIGHT', type: 'AUTO', weight: 0.6 },
   '基础班': { name: '基础班', period: 'PM', type: 'AUTO', weight: 0.8 },
   '电话': { name: '电话', period: 'ANY', type: 'MANDATORY', weight: 1.0 },
   '筛查': { name: '筛查', period: 'ANY', type: 'MANDATORY', weight: 1.0 },
@@ -51,6 +53,7 @@ export const DAY_LABELS: Record<DayOfWeek, string> = {
 export interface DaySchedule {
   AM: TaskName
   PM: TaskName
+  NIGHT: TaskName
 }
 
 export type PersonSchedule = Record<DayOfWeek, DaySchedule>

@@ -14,23 +14,29 @@ function getDates(): string[] {
   return DAYS.map((_, i) => format(addDays(startDate, i), 'MM-dd'))
 }
 
-function handleTaskChange(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM', event: Event) {
+function handleTaskChange(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM' | 'NIGHT', event: Event) {
   const value = (event.target as HTMLSelectElement).value
   store.updateTask(person, day, period, value === '' ? '' : value as TaskName)
 }
 
-function isTaskDisabled(task: TaskInfo, period: 'AM' | 'PM'): boolean {
-  return task.period !== 'ANY' && task.period !== period
+function isTaskDisabled(task: TaskInfo, period: 'AM' | 'PM' | 'NIGHT'): boolean {
+  if (period === 'NIGHT' && task.name !== '随访夜' && task.name !== '休假' && task.name !== '')
+    return true
+  if (task.name === '随访夜' && period !== 'NIGHT')
+    return true
+  if (task.period === 'ANY')
+    return false
+  return task.period !== period
 }
 
-function isHighlighted(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM'): boolean {
+function isHighlighted(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM' | 'NIGHT'): boolean {
   if (!store.highlightedTasks || !store.schedule)
     return false
   const task = store.schedule.data[person][day][period]
   return store.highlightedTasks.includes(task)
 }
 
-function getCellClasses(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM'): string {
+function getCellClasses(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM' | 'NIGHT'): string {
   if (!store.schedule)
     return ''
   const task = store.schedule.data[person][day][period]
@@ -50,7 +56,8 @@ function getCellClasses(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM'):
     case '门诊':
       return 'bg-rose-50 hover:bg-rose-100 text-rose-700 font-medium' // 优先手动任务
     case '随访上午':
-    case '随访下午/夜':
+    case '随访下午':
+    case '随访夜':
     case '基础班':
       return 'bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium' // 每日基础任务
     case '电话':
@@ -80,7 +87,7 @@ function getCellClasses(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM'):
           </th>
           <th
             class="text-gray-700 font-medium px-2 py-3 text-center border-r border-gray-200 w-60px"
-            rowspan="2"
+            rowspan="3"
           >
             时段
           </th>
@@ -103,7 +110,7 @@ function getCellClasses(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM'):
           <tr>
             <td
               class="font-medium px-2 py-1 text-center align-middle border-r border-gray-200"
-              rowspan="2"
+              rowspan="3"
             >
               <div>{{ person }}</div>
               <div class="text-[11px] text-gray-500 font-normal mt-1 flex gap-0.5 items-center justify-center">
@@ -149,13 +156,13 @@ function getCellClasses(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM'):
             </td>
           </tr>
           <tr class="bg-gray-50/50">
-            <td class="px-2 py-1 text-center border-r border-gray-200 h-10">
+            <td class="px-2 py-1 text-center border-b border-r border-gray-100 border-gray-200 h-10">
               <span class="text-xs text-gray-400">下午</span>
             </td>
             <td
               v-for="day in DAYS"
               :key="`${person}-${day}-PM`"
-              class="p-0 border-r border-gray-200 transition-colors duration-300 last:border-r-0"
+              class="p-0 border-b border-r border-gray-100 border-gray-200 transition-colors duration-300 last:border-r-0"
               :class="getCellClasses(person, day, 'PM')"
             >
               <select
@@ -171,6 +178,36 @@ function getCellClasses(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM'):
                   :key="task.name"
                   :value="task.name"
                   :disabled="isTaskDisabled(task, 'PM')"
+                  class="text-gray-900 font-normal"
+                >
+                  {{ task.name }}
+                </option>
+              </select>
+            </td>
+          </tr>
+          <tr>
+            <td class="px-2 py-1 text-center border-r border-gray-200 bg-indigo-50/30 h-10">
+              <span class="text-xs text-indigo-400">晚上</span>
+            </td>
+            <td
+              v-for="day in DAYS"
+              :key="`${person}-${day}-NIGHT`"
+              class="p-0 border-r border-gray-200 transition-colors duration-300 last:border-r-0"
+              :class="getCellClasses(person, day, 'NIGHT')"
+            >
+              <select
+                :value="store.schedule?.data[person][day].NIGHT || ''"
+                class="text-xs text-inherit px-1 border-0 bg-transparent h-10 w-full cursor-pointer focus:outline-none focus:ring-0"
+                @change="handleTaskChange(person, day, 'NIGHT', $event)"
+              >
+                <option value="" class="text-gray-900 font-normal">
+                  未设置
+                </option>
+                <option
+                  v-for="task in taskList"
+                  :key="task.name"
+                  :value="task.name"
+                  :disabled="isTaskDisabled(task, 'NIGHT')"
                   class="text-gray-900 font-normal"
                 >
                   {{ task.name }}
