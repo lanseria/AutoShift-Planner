@@ -5,6 +5,7 @@ definePageMeta({
 
 const store = useScheduleStore()
 const toast = useToast()
+const isTaskConfigOpen = ref(false)
 
 onMounted(() => {
   store.loadWeek()
@@ -127,6 +128,13 @@ function handleResetKeepClinic() {
                   <span class="hidden sm:inline">保留门诊重置</span>
                 </button>
                 <button
+                  class="text-sm text-gray-700 font-medium px-3 py-1.5 border border-gray-200 rounded-lg inline-flex gap-1.5 transition-colors items-center hover:bg-gray-50"
+                  @click="isTaskConfigOpen = true"
+                >
+                  <div class="i-carbon-settings text-sm" />
+                  <span class="hidden sm:inline">任务配置</span>
+                </button>
+                <button
                   class="text-sm text-gray-700 font-medium px-3 py-1.5 border border-gray-200 rounded-lg inline-flex gap-1.5 transition-colors items-center hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                   :disabled="store.isGenerating"
                   @click="handleAutoGenerate"
@@ -217,5 +225,6 @@ function handleResetKeepClinic() {
 
     <WeekendAlert />
     <ToastContainer />
+    <TaskConfigModal v-model="isTaskConfigOpen" />
   </div>
 </template>

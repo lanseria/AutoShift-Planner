@@ -1,6 +1,6 @@
-import type { DayOfWeek, StaffName, TaskName, WeekSchedule } from '~/types/schedule'
+import type { DayOfWeek, StaffName, TaskInfo, TaskName, WeekSchedule } from '~/types/schedule'
 import { format, parseISO, subWeeks } from 'date-fns'
-import { DAYS, STAFF, TASKS } from '~/types/schedule'
+import { DAYS, STAFF } from '~/types/schedule'
 import { loadSchedule } from './schedule'
 
 export const isEmptyOrRest = (task: TaskName): boolean => task === '' || task === '休假'
@@ -104,20 +104,21 @@ export function generateScheduleCore(
   currentSchedule: WeekSchedule,
   activeRules: string[],
   context: PrevWeekContext,
+  taskConfigs: Record<TaskName, TaskInfo>,
   onProgress?: (progress: number) => void,
 ): ScheduleGroup[] | null {
   const isManual = (person: StaffName, day: DayOfWeek, period: 'AM' | 'PM' | 'NIGHT'): boolean => {
     return currentSchedule.data[person][day][period] !== ''
   }
 
-  const restDaysConfig = currentSchedule.restDays || { 组长: 2, 成员A: 2, 成员B: 2, 成员C: 2 }
+  const restDaysConfig = currentSchedule.restDays || { 组长: 1, 成员A: 2, 成员B: 2, 成员C: 2 }
 
   const diffGroups = new Map<number, Map<string, WeekSchedule>>()
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const newSchedule: WeekSchedule = fastCloneSchedule(currentSchedule)
 
-    if (tryGenerate(newSchedule, context, isManual, activeRules, restDaysConfig)) {
+    if (tryGenerate(newSchedule, context, isManual, activeRules, restDaysConfig, taskConfigs)) {
       // 清理临时数据
       for (const p of STAFF) {
         delete (newSchedule as any)[`_rest_${p}`]
@@ -133,12 +134,12 @@ export function generateScheduleCore(
           const am = newSchedule.data[p][d].AM
           const pm = newSchedule.data[p][d].PM
           const night = newSchedule.data[p][d].NIGHT
-          if (am && TASKS[am])
-            w += TASKS[am].weight
-          if (pm && TASKS[pm])
-            w += TASKS[pm].weight
-          if (night && TASKS[night])
-            w += TASKS[night].weight
+          if (am && taskConfigs[am])
+            w += taskConfigs[am].weight
+          if (pm && taskConfigs[pm])
+            w += taskConfigs[pm].weight
+          if (night && taskConfigs[night])
+            w += taskConfigs[night].weight
         }
         memberWorkloads.push(w)
       }
@@ -182,9 +183,15 @@ export function generateScheduleCore(
   return null
 }
 
-export function generateSchedule(currentSchedule: WeekSchedule, activeRules: string[]): ScheduleGroup[] | null {
+export function generateSchedule(currentSchedule: WeekSchedule, activeRules: string[], taskConfigs: Record<TaskName, TaskInfo>): ScheduleGroup[] | null {
   const context = getPrevWeekContext(currentSchedule.weekStartDate)
-  return generateScheduleCore(currentSchedule, activeRules, context)
+  return generateScheduleCore(currentSchedule, activeRules, context, taskConfigs)
+}
+
+// 辅助方法：获取任务配置的指定时段
+function getTaskPeriod(taskConfigs: Record<TaskName, TaskInfo>, task: TaskName, fallback: 'AM' | 'PM' | 'NIGHT'): 'AM' | 'PM' | 'NIGHT' {
+  const p = taskConfigs[task]?.period
+  return p === 'ANY' ? fallback : (p as 'AM' | 'PM' | 'NIGHT')
 }
 
 function getRandom<T>(arr: T[], n: number): T[] {
@@ -221,6 +228,7 @@ function tryGenerate(
   isManual: (person: StaffName, day: DayOfWeek, period: 'AM' | 'PM' | 'NIGHT') => boolean,
   activeRules: string[],
   restDaysConfig: Record<StaffName, number>,
+  taskConfigs: Record<TaskName, TaskInfo>,
 ): boolean {
   const hasRule = (rule: string) => activeRules.includes(rule)
 
@@ -228,12 +236,12 @@ function tryGenerate(
   const currentWorkload = { 组长: 0, 成员A: 0, 成员B: 0, 成员C: 0 }
   for (const p of STAFF) {
     for (const d of DAYS) {
-      const am = schedule.data[p][d].AM; if (am && TASKS[am])
-        currentWorkload[p] += TASKS[am].weight
-      const pm = schedule.data[p][d].PM; if (pm && TASKS[pm])
-        currentWorkload[p] += TASKS[pm].weight
-      const night = schedule.data[p][d].NIGHT; if (night && TASKS[night])
-        currentWorkload[p] += TASKS[night].weight
+      const am = schedule.data[p][d].AM; if (am && taskConfigs[am])
+        currentWorkload[p] += taskConfigs[am].weight
+      const pm = schedule.data[p][d].PM; if (pm && taskConfigs[pm])
+        currentWorkload[p] += taskConfigs[pm].weight
+      const night = schedule.data[p][d].NIGHT; if (night && taskConfigs[night])
+        currentWorkload[p] += taskConfigs[night].weight
     }
   }
 
@@ -345,17 +353,26 @@ function tryGenerate(
     }
   }
 
-  // 根据开启的规则，计算每天各个时段最低需要的总硬性槽位
+  // 根据开启的规则，通过动态读取任务的时段配置，计算每天各个时段最低需要的总硬性槽位
   for (const d of DAYS) {
     let reqAM = 0; let reqPM = 0; let reqNIGHT = 0
+    const addReq = (task: TaskName, count: number) => {
+      const p = taskConfigs[task].period
+      if (p === 'AM')
+        reqAM += count
+      if (p === 'PM')
+        reqPM += count
+      if (p === 'NIGHT')
+        reqNIGHT += count
+    }
     if (hasRule('daily_basic')) {
-      reqAM += 1; reqPM += 2; reqNIGHT += 1
+      addReq('随访上午', 1); addReq('随访下午', 1); addReq('随访夜', 1); addReq('基础班', 1)
     }
     if (hasRule('fixed_tasks')) {
       if (d === 'Thursday')
-        reqPM += 2
+        addReq('群石墨修改', 2)
       if (d === 'Saturday')
-        reqPM += 1
+        addReq('群石墨修改', 1)
     }
     // 叠加后判断，若当天可用人手低于各规则叠加后的硬性要求，直接极速剪枝
     if (availAM[d] < reqAM || availPM[d] < reqPM || availNIGHT[d] < reqNIGHT) {
@@ -386,36 +403,38 @@ function tryGenerate(
 
   // --- 3. 安排固定任务 (最高限制) ---
   if (hasRule('fixed_tasks')) {
-    const thuPMCount = STAFF.filter(p => schedule.data[p].Thursday.PM === '群石墨修改').length
+    const fixedPeriod = getTaskPeriod(taskConfigs, '群石墨修改', 'PM')
+    const thuPMCount = STAFF.filter(p => schedule.data[p].Thursday[fixedPeriod] === '群石墨修改').length
     if (thuPMCount < 2) {
-      const cands = STAFF.filter(p => !((schedule as any)[`_rest_${p}`].includes('Thursday')) && !isManual(p, 'Thursday', 'PM') && schedule.data[p].Thursday.PM === '')
+      const cands = STAFF.filter(p => !((schedule as any)[`_rest_${p}`].includes('Thursday')) && !isManual(p, 'Thursday', fixedPeriod) && schedule.data[p].Thursday[fixedPeriod] === '')
       if (cands.length < 2 - thuPMCount)
         return false
       for (let i = 0; i < 2 - thuPMCount; i++) {
-        const availCands = cands.filter(c => schedule.data[c].Thursday.PM !== '群石墨修改')
-        const chosen = pickPerson(availCands, TASKS['群石墨修改'].weight)
+        const availCands = cands.filter(c => schedule.data[c].Thursday[fixedPeriod] !== '群石墨修改')
+        const chosen = pickPerson(availCands, taskConfigs['群石墨修改'].weight)
         if (!chosen)
           return false
-        schedule.data[chosen].Thursday.PM = '群石墨修改'
+        schedule.data[chosen].Thursday[fixedPeriod] = '群石墨修改'
       }
     }
 
-    const satPMCount = STAFF.filter(p => schedule.data[p].Saturday.PM === '群石墨修改').length
+    const satPMCount = STAFF.filter(p => schedule.data[p].Saturday[fixedPeriod] === '群石墨修改').length
     if (satPMCount < 1) {
-      const cands = STAFF.filter(p => !((schedule as any)[`_rest_${p}`].includes('Saturday')) && !isManual(p, 'Saturday', 'PM') && schedule.data[p].Saturday.PM === '')
+      const cands = STAFF.filter(p => !((schedule as any)[`_rest_${p}`].includes('Saturday')) && !isManual(p, 'Saturday', fixedPeriod) && schedule.data[p].Saturday[fixedPeriod] === '')
       if (cands.length < 1 - satPMCount)
         return false
-      const chosen = pickPerson(cands, TASKS['群石墨修改'].weight)
+      const chosen = pickPerson(cands, taskConfigs['群石墨修改'].weight)
       if (!chosen)
         return false
-      schedule.data[chosen].Saturday.PM = '群石墨修改'
+      schedule.data[chosen].Saturday[fixedPeriod] = '群石墨修改'
     }
   }
 
   // --- 4. 安排每日基础 (限制度较高) ---
   if (hasRule('daily_basic')) {
     for (const d of DAYS) {
-      const assignDaily = (task: TaskName, period: 'AM' | 'PM' | 'NIGHT') => {
+      const assignDaily = (task: TaskName, fallbackPeriod: 'AM' | 'PM' | 'NIGHT') => {
+        const period = getTaskPeriod(taskConfigs, task, fallbackPeriod)
         if (STAFF.some(p => schedule.data[p][d][period] === task))
           return true
         const cands = STAFF.filter((p) => {
@@ -456,7 +475,7 @@ function tryGenerate(
         })
         if (cands.length === 0)
           return false
-        const chosen = pickPerson(cands, TASKS[task].weight)
+        const chosen = pickPerson(cands, taskConfigs[task].weight)
         if (!chosen)
           return false
         schedule.data[chosen][d][period] = task
@@ -476,19 +495,21 @@ function tryGenerate(
 
   // --- 5. 安排部门必排 ---
   if (hasRule('dept_mandatory')) {
-    const hasYundong = STAFF.some(p => DAYS.some(d => schedule.data[p][d].PM === '运动处方'))
+    const ydPeriod = getTaskPeriod(taskConfigs, '运动处方', 'PM')
+    const hasYundong = STAFF.some(p => DAYS.some(d => schedule.data[p][d][ydPeriod] === '运动处方'))
     if (!hasYundong) {
-      const pmSlots = getAvailableSlots((_p, _d, period) => period === 'PM')
-      const chosen = pickSlot(pmSlots, TASKS['运动处方'].weight)
+      const slots = getAvailableSlots((_p, _d, period) => period === ydPeriod)
+      const chosen = pickSlot(slots, taskConfigs['运动处方'].weight)
       if (!chosen)
         return false
-      schedule.data[chosen.p][chosen.d].PM = '运动处方'
+      schedule.data[chosen.p][chosen.d][ydPeriod] = '运动处方'
     }
 
-    const hasShetai = STAFF.some(p => DAYS.some(d => schedule.data[p][d].AM === '舌苔评估'))
+    const stPeriod = getTaskPeriod(taskConfigs, '舌苔评估', 'AM')
+    const hasShetai = STAFF.some(p => DAYS.some(d => schedule.data[p][d][stPeriod] === '舌苔评估'))
     if (!hasShetai) {
-      const amSlots = getAvailableSlots((p, d, period) => {
-        if (period !== 'AM')
+      const slots = getAvailableSlots((p, d, period) => {
+        if (period !== stPeriod)
           return false
         const prevDay = getPrevDay(d)
         const nextDay = getNextDay(d)
@@ -502,10 +523,10 @@ function tryGenerate(
           return false
         return true
       })
-      const chosen = pickSlot(amSlots, TASKS['舌苔评估'].weight)
+      const chosen = pickSlot(slots, taskConfigs['舌苔评估'].weight)
       if (!chosen)
         return false
-      schedule.data[chosen.p][chosen.d].AM = '舌苔评估'
+      schedule.data[chosen.p][chosen.d][stPeriod] = '舌苔评估'
     }
   }
 
@@ -515,14 +536,15 @@ function tryGenerate(
       const assignPersonal = (task: TaskName) => {
         if (DAYS.some(d => schedule.data[p][d].AM === task || schedule.data[p][d].PM === task || schedule.data[p][d].NIGHT === task))
           return true
-        let slots = getAvailableSlots((_p, d, _period) => _p === p && _period !== 'NIGHT' && schedule.data[p][d].AM === '' && schedule.data[p][d].PM === '')
+        const reqPeriod = taskConfigs[task].period
+        let slots = getAvailableSlots((_p, d, _period) => _p === p && (reqPeriod === 'ANY' ? _period !== 'NIGHT' : _period === reqPeriod) && schedule.data[p][d][_period] === '')
         if (slots.length === 0)
-          slots = getAvailableSlots((_p, _d, _period) => _p === p && _period !== 'NIGHT')
+          slots = getAvailableSlots((_p, _d, _period) => _p === p && (reqPeriod === 'ANY' ? _period !== 'NIGHT' : _period === reqPeriod))
         if (slots.length === 0)
           return false
         // 针对单人的任务无需跨人均衡，直接随机安排
         const chosen = slots[Math.floor(Math.random() * slots.length)]!
-        currentWorkload[chosen.p] += TASKS[task].weight
+        currentWorkload[chosen.p] += taskConfigs[task].weight
         schedule.data[chosen.p][chosen.d][chosen.period] = task
         return true
       }
@@ -533,7 +555,7 @@ function tryGenerate(
     }
   }
 
-  return validateSchedule(schedule, context, isManual, activeRules, restDaysConfig)
+  return validateSchedule(schedule, context, isManual, activeRules, restDaysConfig, taskConfigs)
 }
 
 function validateSchedule(
@@ -542,6 +564,7 @@ function validateSchedule(
   isManual: (person: StaffName, day: DayOfWeek, period: 'AM' | 'PM' | 'NIGHT') => boolean,
   activeRules: string[],
   restDaysConfig: Record<StaffName, number>,
+  taskConfigs: Record<TaskName, TaskInfo>,
 ): boolean {
   const hasRule = (rule: string) => activeRules.includes(rule)
 
@@ -552,16 +575,16 @@ function validateSchedule(
       let sfnight = 0
       let jc = 0
       for (const p of STAFF) {
-        if (schedule.data[p][d].AM === '随访上午')
+        if (schedule.data[p][d][getTaskPeriod(taskConfigs, '随访上午', 'AM')] === '随访上午')
           sfam++
-        if (schedule.data[p][d].PM === '随访下午')
+        if (schedule.data[p][d][getTaskPeriod(taskConfigs, '随访下午', 'PM')] === '随访下午')
           sfpm++
-        if (schedule.data[p][d].NIGHT === '随访夜')
+        if (schedule.data[p][d][getTaskPeriod(taskConfigs, '随访夜', 'NIGHT')] === '随访夜')
           sfnight++
-        if (schedule.data[p][d].PM === '基础班')
+        if (schedule.data[p][d][getTaskPeriod(taskConfigs, '基础班', 'PM')] === '基础班')
           jc++
 
-        // 校验同一个人一天不能同时出现多个随访
+        // 校验同一个人一天不能同时包揽3个随访
         const isSuiFang = (t: string) => t === '随访上午' || t === '随访下午' || t === '随访夜'
         let suiFangCount = 0
         if (isSuiFang(schedule.data[p][d].AM))
@@ -581,11 +604,13 @@ function validateSchedule(
   if (hasRule('dept_mandatory')) {
     let yundongCount = 0
     let shetaiCount = 0
+    const ydPeriod = getTaskPeriod(taskConfigs, '运动处方', 'PM')
+    const stPeriod = getTaskPeriod(taskConfigs, '舌苔评估', 'AM')
     for (const p of STAFF) {
       for (const d of DAYS) {
-        if (schedule.data[p][d].PM === '运动处方')
+        if (schedule.data[p][d][ydPeriod] === '运动处方')
           yundongCount++
-        if (schedule.data[p][d].AM === '舌苔评估')
+        if (schedule.data[p][d][stPeriod] === '舌苔评估')
           shetaiCount++
       }
     }
@@ -596,10 +621,11 @@ function validateSchedule(
   if (hasRule('fixed_tasks')) {
     let thuPMCount = 0
     let satPMCount = 0
+    const fixedPeriod = getTaskPeriod(taskConfigs, '群石墨修改', 'PM')
     for (const p of STAFF) {
-      if (schedule.data[p].Thursday.PM === '群石墨修改')
+      if (schedule.data[p].Thursday[fixedPeriod] === '群石墨修改')
         thuPMCount++
-      if (schedule.data[p].Saturday.PM === '群石墨修改')
+      if (schedule.data[p].Saturday[fixedPeriod] === '群石墨修改')
         satPMCount++
     }
     if (thuPMCount < 2 || satPMCount < 1)

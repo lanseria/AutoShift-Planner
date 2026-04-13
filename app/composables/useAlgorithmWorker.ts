@@ -10,6 +10,7 @@ export function useAlgorithmWorker() {
     schedule: WeekSchedule,
     activeRules: string[],
     context: PrevWeekContext,
+    taskConfigs: Record<string, any>,
   ): Promise<ScheduleGroup[] | null> {
     return new Promise((resolve) => {
       isGenerating.value = true
@@ -37,7 +38,7 @@ export function useAlgorithmWorker() {
       }
 
       // Vue reactive proxy 无法被 postMessage 结构化克隆，需先深拷贝为普通对象
-      const payload = JSON.parse(JSON.stringify({ schedule, activeRules, context }))
+      const payload = JSON.parse(JSON.stringify({ schedule, activeRules, context, taskConfigs }))
       worker.postMessage(payload)
     })
   }

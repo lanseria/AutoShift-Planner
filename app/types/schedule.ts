@@ -19,7 +19,7 @@ export interface TaskInfo {
   weight: number
 }
 
-export const TASKS: Record<TaskName, TaskInfo> = {
+export const DEFAULT_TASKS: Record<TaskName, TaskInfo> = {
   '门诊': { name: '门诊', period: 'ANY', type: 'MANUAL', weight: 1.0 },
   '随访上午': { name: '随访上午', period: 'AM', type: 'AUTO', weight: 1.0 },
   '随访下午': { name: '随访下午', period: 'PM', type: 'AUTO', weight: 0.4 },

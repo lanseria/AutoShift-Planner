@@ -1,6 +1,6 @@
-import type { DaySchedule, PersonSchedule, StaffName, WeekSchedule } from '~/types/schedule'
+import type { DaySchedule, PersonSchedule, StaffName, TaskInfo, TaskName, WeekSchedule } from '~/types/schedule'
 import { format, startOfWeek } from 'date-fns'
-import { DAYS, STAFF, TASKS } from '~/types/schedule'
+import { DAYS, STAFF } from '~/types/schedule'
 
 export function getEmptyPersonSchedule(): PersonSchedule {
   const schedule = {} as PersonSchedule
@@ -18,7 +18,7 @@ export function getEmptyWeekSchedule(weekStartDate: string): WeekSchedule {
   return {
     weekStartDate,
     data,
-    restDays: { 组长: 2, 成员A: 2, 成员B: 2, 成员C: 2 },
+    restDays: { 组长: 1, 成员A: 2, 成员B: 2, 成员C: 2 },
   }
 }
 
@@ -41,7 +41,7 @@ export function loadSchedule(weekStartDate: string): WeekSchedule {
         return getEmptyWeekSchedule(weekStartDate)
       }
       if (!parsed.restDays) {
-        parsed.restDays = { 组长: 2, 成员A: 2, 成员B: 2, 成员C: 2 }
+        parsed.restDays = { 组长: 1, 成员A: 2, 成员B: 2, 成员C: 2 }
       }
       return parsed
     }
@@ -57,7 +57,7 @@ export function saveSchedule(schedule: WeekSchedule): void {
   localStorage.setItem(key, JSON.stringify(schedule))
 }
 
-export function calculateWorkload(schedule: WeekSchedule): Record<StaffName, number> {
+export function calculateWorkload(schedule: WeekSchedule, taskConfigs: Record<TaskName, TaskInfo>): Record<StaffName, number> {
   const workload = {} as Record<StaffName, number>
   for (const person of STAFF) {
     let total = 0
@@ -65,12 +65,12 @@ export function calculateWorkload(schedule: WeekSchedule): Record<StaffName, num
       const amTask = schedule.data[person][day].AM
       const pmTask = schedule.data[person][day].PM
       const nightTask = schedule.data[person][day].NIGHT
-      if (amTask)
-        total += TASKS[amTask].weight
-      if (pmTask)
-        total += TASKS[pmTask].weight
-      if (nightTask)
-        total += TASKS[nightTask].weight
+      if (amTask && taskConfigs[amTask])
+        total += taskConfigs[amTask].weight
+      if (pmTask && taskConfigs[pmTask])
+        total += taskConfigs[pmTask].weight
+      if (nightTask && taskConfigs[nightTask])
+        total += taskConfigs[nightTask].weight
     }
     workload[person] = total
   }

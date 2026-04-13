@@ -1,10 +1,10 @@
-import type { DayOfWeek, StaffName, TaskName, WeekSchedule } from '~/types/schedule'
+import type { DayOfWeek, StaffName, TaskInfo, TaskName, WeekSchedule } from '~/types/schedule'
 import type { ScheduleGroup } from '~/utils/algorithm'
 import { addDays, addWeeks, format, isSaturday, isSunday, parseISO, subWeeks } from 'date-fns'
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { useAlgorithmWorker } from '~/composables/useAlgorithmWorker'
-import { DAYS, STAFF } from '~/types/schedule'
+import { DAYS, DEFAULT_TASKS, STAFF } from '~/types/schedule'
 import { getPrevWeekContext } from '~/utils/algorithm'
 import { calculateWorkload, getWeekStart, loadSchedule, saveSchedule } from '~/utils/schedule'
 
@@ -12,6 +12,25 @@ export const useScheduleStore = defineStore('schedule', () => {
   const currentDate = ref(new Date())
   const schedule = ref<WeekSchedule | null>(null)
   const { progress, isGenerating, run: runWorker } = useAlgorithmWorker()
+
+  // 任务配置状态
+  const taskConfigs = ref<Record<TaskName, TaskInfo>>(JSON.parse(JSON.stringify(DEFAULT_TASKS)))
+
+  // 立即加载配置
+  const storedConfigs = localStorage.getItem('taskConfigs')
+  if (storedConfigs) {
+    try {
+      taskConfigs.value = { ...DEFAULT_TASKS, ...JSON.parse(storedConfigs) }
+    }
+    catch (e) {
+      console.error(e)
+    }
+  }
+
+  function saveTaskConfigs(newConfigs: Record<TaskName, TaskInfo>) {
+    taskConfigs.value = newConfigs
+    localStorage.setItem('taskConfigs', JSON.stringify(newConfigs))
+  }
 
   const weekStartDate = computed(() => getWeekStart(currentDate.value))
 
@@ -24,7 +43,7 @@ export const useScheduleStore = defineStore('schedule', () => {
   const workload = computed(() => {
     if (!schedule.value)
       return {} as Record<StaffName, number>
-    return calculateWorkload(schedule.value)
+    return calculateWorkload(schedule.value, taskConfigs.value)
   })
 
   const isUnbalanced = computed(() => {
@@ -84,7 +103,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     if (!schedule.value)
       return
     if (!schedule.value.restDays) {
-      schedule.value.restDays = { 组长: 2, 成员A: 2, 成员B: 2, 成员C: 2 }
+      schedule.value.restDays = { 组长: 1, 成员A: 2, 成员B: 2, 成员C: 2 }
     }
     schedule.value.restDays[person] = days
     clearGenerated()
@@ -190,7 +209,7 @@ export const useScheduleStore = defineStore('schedule', () => {
 
     // 1. 计算休假占据的槽位 (每天3个槽)
     let restSlots = 0
-    const restConfig = schedule.value.restDays || { 组长: 2, 成员A: 2, 成员B: 2, 成员C: 2 }
+    const restConfig = schedule.value.restDays || { 组长: 1, 成员A: 2, 成员B: 2, 成员C: 2 }
     for (const p of STAFF) restSlots += (restConfig[p] || 0) * 3
 
     // 2. 根据开启的规则，计算必排任务所需的槽位
@@ -237,7 +256,7 @@ export const useScheduleStore = defineStore('schedule', () => {
       return { success: false, msg: '没有排班表' }
 
     const context = getPrevWeekContext(schedule.value.weekStartDate)
-    const resultGroups = await runWorker(schedule.value, activeRules.value, context)
+    const resultGroups = await runWorker(schedule.value, activeRules.value, context, taskConfigs.value)
     if (resultGroups && resultGroups.length > 0) {
       generatedResults.value = resultGroups
       const totalSchedules = resultGroups.reduce((acc, g) => acc + g.schedules.length, 0)
@@ -284,5 +303,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     progress,
     isGenerating,
     checkFeasibility,
+    taskConfigs,
+    saveTaskConfigs,
   }
 })

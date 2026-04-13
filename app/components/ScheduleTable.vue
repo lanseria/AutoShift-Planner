@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { DayOfWeek, StaffName, TaskInfo, TaskName } from '~/types/schedule'
 import { addDays, format, parseISO } from 'date-fns'
-import { DAY_LABELS, DAYS, STAFF, TASKS } from '~/types/schedule'
+import { DAY_LABELS, DAYS, STAFF } from '~/types/schedule'
 
 const store = useScheduleStore()
 
-const taskList = (Object.values(TASKS) as TaskInfo[]).filter(t => t.name !== '')
+const taskList = computed(() => (Object.values(store.taskConfigs) as TaskInfo[]).filter(t => t.name !== ''))
 
 function getDates(): string[] {
   if (!store.schedule)
