@@ -14,21 +14,56 @@ function getDates(): string[] {
 
 function getCellClasses(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM' | 'NIGHT'): string {
   const task = props.schedule.data[person][day][period]
+
+  let classes = ''
+
+  // 1. 人员背景色
+  switch (person) {
+    case '组长': classes += 'bg-slate-100 '; break
+    case '成员A': classes += 'bg-green-50 '; break
+    case '成员B': classes += 'bg-amber-50 '; break
+    case '成员C': classes += 'bg-violet-50 '; break
+    default: classes += 'bg-gray-50 '; break
+  }
+
+  // 2. 任务文字色
   switch (task) {
-    case '': return 'bg-amber-100 text-amber-900 font-bold'
-    case '休假': return 'bg-gray-100 text-gray-400'
-    case '门诊': return 'bg-rose-50 text-rose-700 font-medium'
+    case '':
+      classes += 'text-gray-400 font-bold opacity-70'
+      break
+    case '休假':
+      classes += 'text-gray-400 font-medium opacity-50 line-through'
+      break
+    case '休息':
+      classes += 'text-teal-500 font-medium opacity-80'
+      break
+    case '门诊':
+      classes += 'text-rose-600 font-bold'
+      break
     case '随访上午':
     case '随访下午':
     case '随访夜':
-    case '基础班': return 'bg-blue-50 text-blue-700 font-medium'
+      classes += 'text-blue-600 font-semibold'
+      break
+    case '基础班':
+      classes += 'text-cyan-600 font-bold'
+      break
     case '电话':
-    case '筛查': return 'bg-emerald-50 text-emerald-700 font-medium'
+    case '筛查':
+      classes += 'text-emerald-600 font-semibold'
+      break
     case '运动处方':
-    case '舌苔评估': return 'bg-purple-50 text-purple-700 font-medium'
-    case '群石墨修改': return 'bg-indigo-50 text-indigo-700 font-medium'
-    default: return 'bg-transparent'
+    case '舌苔评估':
+      classes += 'text-pink-600 font-semibold'
+      break
+    case '群石墨修改':
+      classes += 'text-indigo-600 font-semibold'
+      break
+    default:
+      classes += 'text-gray-700'
   }
+
+  return classes
 }
 </script>
 

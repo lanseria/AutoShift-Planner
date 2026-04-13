@@ -1,9 +1,9 @@
 import type { DayOfWeek, StaffName, TaskInfo, TaskName, WeekSchedule } from '~/types/schedule'
 import { format, parseISO, subWeeks } from 'date-fns'
-import { DAYS, STAFF } from '~/types/schedule'
+import { DAY_LABELS, DAYS, STAFF } from '~/types/schedule'
 import { loadSchedule } from './schedule'
 
-export const isEmptyOrRest = (task: TaskName): boolean => task === '' || task === '休假'
+export const isEmptyOrRest = (task: TaskName): boolean => task === '' || task === '休假' || task === '休息'
 
 export interface PrevWeekContext {
   sundayAM: Record<StaffName, TaskName>
@@ -119,9 +119,17 @@ export function generateScheduleCore(
     const newSchedule: WeekSchedule = fastCloneSchedule(currentSchedule)
 
     if (tryGenerate(newSchedule, context, isManual, activeRules, restDaysConfig, taskConfigs)) {
-      // 清理临时数据
+      // 清理临时数据，并将所有未设置（空值）转换为"休息"
       for (const p of STAFF) {
         delete (newSchedule as any)[`_rest_${p}`]
+        for (const d of DAYS) {
+          if (newSchedule.data[p][d].AM === '')
+            newSchedule.data[p][d].AM = '休息'
+          if (newSchedule.data[p][d].PM === '')
+            newSchedule.data[p][d].PM = '休息'
+          if (newSchedule.data[p][d].NIGHT === '')
+            newSchedule.data[p][d].NIGHT = '休息'
+        }
       }
 
       // 计算工作量差值（仅限成员）
@@ -366,7 +374,9 @@ function tryGenerate(
         reqNIGHT += count
     }
     if (hasRule('daily_basic')) {
-      addReq('随访上午', 1); addReq('随访下午', 1); addReq('随访夜', 1); addReq('基础班', 1)
+      addReq('随访上午', 1); addReq('随访下午', 1); addReq('随访夜', 1)
+      if (d !== 'Saturday')
+        addReq('基础班', 1)
     }
     if (hasRule('fixed_tasks')) {
       if (d === 'Thursday')
@@ -377,6 +387,11 @@ function tryGenerate(
     // 叠加后判断，若当天可用人手低于各规则叠加后的硬性要求，直接极速剪枝
     if (availAM[d] < reqAM || availPM[d] < reqPM || availNIGHT[d] < reqNIGHT) {
       return false
+    }
+    // 特殊：周六基础班可排在上午或下午，因此周六的AM+PM总量需足够承载额外1个基础班
+    if (hasRule('daily_basic') && d === 'Saturday') {
+      if (availAM[d] + availPM[d] < reqAM + reqPM + 1)
+        return false
     }
   }
 
@@ -433,8 +448,8 @@ function tryGenerate(
   // --- 4. 安排每日基础 (限制度较高) ---
   if (hasRule('daily_basic')) {
     for (const d of DAYS) {
-      const assignDaily = (task: TaskName, fallbackPeriod: 'AM' | 'PM' | 'NIGHT') => {
-        const period = getTaskPeriod(taskConfigs, task, fallbackPeriod)
+      const assignDaily = (task: TaskName, fallbackPeriod: 'AM' | 'PM' | 'NIGHT', overridePeriod?: 'AM' | 'PM' | 'NIGHT') => {
+        const period = overridePeriod || getTaskPeriod(taskConfigs, task, fallbackPeriod)
         if (STAFF.some(p => schedule.data[p][d][period] === task))
           return true
         const cands = STAFF.filter((p) => {
@@ -482,14 +497,32 @@ function tryGenerate(
         return true
       }
 
-      if (!assignDaily('随访上午', 'AM'))
-        return false
-      if (!assignDaily('随访下午', 'PM'))
-        return false
-      if (!assignDaily('随访夜', 'NIGHT'))
-        return false
-      if (!assignDaily('基础班', 'PM'))
-        return false
+      if (d === 'Saturday') {
+        if (!assignDaily('随访上午', 'AM'))
+          return false
+        if (!assignDaily('随访下午', 'PM'))
+          return false
+        if (!assignDaily('随访夜', 'NIGHT'))
+          return false
+        // 特判周六基础班：随机尝试AM或PM，一旦成功即返回
+        const isAM = Math.random() > 0.5
+        let ok = assignDaily('基础班', 'PM', isAM ? 'AM' : 'PM')
+        if (!ok) {
+          ok = assignDaily('基础班', 'PM', !isAM ? 'AM' : 'PM')
+        }
+        if (!ok)
+          return false
+      }
+      else {
+        if (!assignDaily('随访上午', 'AM'))
+          return false
+        if (!assignDaily('随访下午', 'PM'))
+          return false
+        if (!assignDaily('随访夜', 'NIGHT'))
+          return false
+        if (!assignDaily('基础班', 'PM'))
+          return false
+      }
     }
   }
 
@@ -558,6 +591,179 @@ function tryGenerate(
   return validateSchedule(schedule, context, isManual, activeRules, restDaysConfig, taskConfigs)
 }
 
+export function verifySchedule(
+  schedule: WeekSchedule,
+  activeRules: string[],
+  taskConfigs: Record<TaskName, TaskInfo>,
+): { valid: boolean, errors: string[] } {
+  const errors: string[] = []
+  const hasRule = (rule: string) => activeRules.includes(rule)
+  const context = getPrevWeekContext(schedule.weekStartDate)
+  const restDaysConfig = schedule.restDays || { 组长: 1, 成员A: 2, 成员B: 2, 成员C: 2 }
+
+  // 1. 检查未排满的单元格
+  let hasEmpty = false
+  for (const p of STAFF) {
+    for (const d of DAYS) {
+      if (schedule.data[p][d].AM === '' || schedule.data[p][d].PM === '' || schedule.data[p][d].NIGHT === '') {
+        hasEmpty = true
+      }
+    }
+  }
+  if (hasEmpty) {
+    errors.push('排班表未排满（存在"未设置"的单元格）')
+  }
+
+  // 2. 每日基础
+  if (hasRule('daily_basic')) {
+    for (const d of DAYS) {
+      let sfam = 0; let sfpm = 0; let sfnight = 0; let jc = 0
+      for (const p of STAFF) {
+        if (schedule.data[p][d][getTaskPeriod(taskConfigs, '随访上午', 'AM')] === '随访上午')
+          sfam++
+        if (schedule.data[p][d][getTaskPeriod(taskConfigs, '随访下午', 'PM')] === '随访下午')
+          sfpm++
+        if (schedule.data[p][d][getTaskPeriod(taskConfigs, '随访夜', 'NIGHT')] === '随访夜')
+          sfnight++
+        if (d === 'Saturday') {
+          if (schedule.data[p][d].AM === '基础班' || schedule.data[p][d].PM === '基础班')
+            jc++
+        }
+        else {
+          if (schedule.data[p][d][getTaskPeriod(taskConfigs, '基础班', 'PM')] === '基础班')
+            jc++
+        }
+
+        const isSuiFang = (t: string) => t === '随访上午' || t === '随访下午' || t === '随访夜'
+        let suiFangCount = 0
+        if (isSuiFang(schedule.data[p][d].AM))
+          suiFangCount++
+        if (isSuiFang(schedule.data[p][d].PM))
+          suiFangCount++
+        if (isSuiFang(schedule.data[p][d].NIGHT))
+          suiFangCount++
+        if (suiFangCount > 2)
+          errors.push(`${DAY_LABELS[d]} ${p} 一个人包揽了3个随访`)
+      }
+      if (sfam !== 1 || sfpm !== 1 || sfnight !== 1 || jc !== 1) {
+        errors.push(`${DAY_LABELS[d]} 基础班或随访数量不符合每日必排规则`)
+      }
+    }
+  }
+
+  // 3. 部门必排
+  if (hasRule('dept_mandatory')) {
+    let yd = 0; let st = 0
+    const ydPeriod = getTaskPeriod(taskConfigs, '运动处方', 'PM')
+    const stPeriod = getTaskPeriod(taskConfigs, '舌苔评估', 'AM')
+    for (const p of STAFF) {
+      for (const d of DAYS) {
+        if (schedule.data[p][d][ydPeriod] === '运动处方')
+          yd++
+        if (schedule.data[p][d][stPeriod] === '舌苔评估')
+          st++
+      }
+    }
+    if (yd < 1)
+      errors.push('每周部门需完成 1 次运动处方')
+    if (st < 1)
+      errors.push('每周部门需完成 1 次舌苔评估')
+  }
+
+  // 4. 固定任务
+  if (hasRule('fixed_tasks')) {
+    let thu = 0; let sat = 0
+    const fixedPeriod = getTaskPeriod(taskConfigs, '群石墨修改', 'PM')
+    for (const p of STAFF) {
+      if (schedule.data[p].Thursday[fixedPeriod] === '群石墨修改')
+        thu++
+      if (schedule.data[p].Saturday[fixedPeriod] === '群石墨修改')
+        sat++
+    }
+    if (thu < 2)
+      errors.push('周四需要 2 人负责群石墨修改')
+    if (sat < 1)
+      errors.push('周六需要 1 人负责群石墨修改')
+  }
+
+  // 5. 个人必排与休假、疲劳
+  const isAMFatigue = (task: string) => task === '随访上午' || task === '舌苔评估' || task === '门诊'
+
+  for (const p of STAFF) {
+    if (hasRule('personal_mandatory')) {
+      let dh = 0; let sc = 0
+      for (const d of DAYS) {
+        if (schedule.data[p][d].AM === '电话' || schedule.data[p][d].PM === '电话' || schedule.data[p][d].NIGHT === '电话')
+          dh++
+        if (schedule.data[p][d].AM === '筛查' || schedule.data[p][d].PM === '筛查' || schedule.data[p][d].NIGHT === '筛查')
+          sc++
+      }
+      if (dh !== 1)
+        errors.push(`${p} 每周必须且只能排 1 次电话`)
+      if (sc !== 1)
+        errors.push(`${p} 每周必须且只能排 1 次筛查`)
+    }
+
+    let emptyDays = 0
+    const emptyDayList: DayOfWeek[] = []
+    for (const d of DAYS) {
+      const am = schedule.data[p][d].AM
+      const pm = schedule.data[p][d].PM
+      const night = schedule.data[p][d].NIGHT
+      const hasRest = am === '休假' || pm === '休假' || night === '休假'
+      const allRest = am === '休假' && pm === '休假' && night === '休假'
+
+      if (hasRest && !allRest)
+        errors.push(`${DAY_LABELS[d]} ${p} 存在半天休假，休假必须全天`)
+      if (allRest) {
+        emptyDays++
+        emptyDayList.push(d)
+      }
+    }
+    if (emptyDays !== restDaysConfig[p]) {
+      errors.push(`${p} 的休假天数应为 ${restDaysConfig[p]} 天，实际为 ${emptyDays} 天`)
+    }
+
+    if (hasRule('consecutive_rest') && restDaysConfig[p] === 2 && emptyDays === 2) {
+      const d1 = emptyDayList[0]!
+      const d2 = emptyDayList[1]!
+      const isConsecutive = DAYS.indexOf(d2) - DAYS.indexOf(d1) === 1
+      const isEnds = d1 === 'Monday' && d2 === 'Sunday'
+      if (!isConsecutive && !isEnds)
+        errors.push(`${p} 的两天休假必须连续`)
+    }
+
+    if (hasRule('night_fatigue')) {
+      if (context.sundayNIGHT[p] === '随访夜' && isAMFatigue(schedule.data[p].Monday.AM)) {
+        errors.push(`${p} 上周日排了随访夜，本周一上午不能排疲劳任务`)
+      }
+      for (let i = 0; i < 6; i++) {
+        const d = DAYS[i]!
+        const nextD = DAYS[i + 1]!
+        if (schedule.data[p][d].NIGHT === '随访夜' && isAMFatigue(schedule.data[p][nextD].AM)) {
+          errors.push(`${DAY_LABELS[d]} ${p} 排了随访夜，次日上午不能排疲劳任务`)
+        }
+      }
+    }
+
+    if (hasRule('am_fatigue')) {
+      if (isAMFatigue(context.sundayAM[p]) && isAMFatigue(schedule.data[p].Monday.AM)) {
+        errors.push(`${p} 跨周连续两天的上午排了疲劳任务`)
+      }
+      for (let i = 0; i < 6; i++) {
+        const d = DAYS[i]!
+        const nextD = DAYS[i + 1]!
+        if (isAMFatigue(schedule.data[p][d].AM) && isAMFatigue(schedule.data[p][nextD].AM)) {
+          errors.push(`${p} 在 ${DAY_LABELS[d]} 和 ${DAY_LABELS[nextD]} 连续两天的上午排了疲劳任务`)
+        }
+      }
+    }
+  }
+
+  const uniqueErrors = [...new Set(errors)]
+  return { valid: uniqueErrors.length === 0, errors: uniqueErrors }
+}
+
 function validateSchedule(
   schedule: WeekSchedule,
   context: PrevWeekContext,
@@ -581,8 +787,14 @@ function validateSchedule(
           sfpm++
         if (schedule.data[p][d][getTaskPeriod(taskConfigs, '随访夜', 'NIGHT')] === '随访夜')
           sfnight++
-        if (schedule.data[p][d][getTaskPeriod(taskConfigs, '基础班', 'PM')] === '基础班')
-          jc++
+        if (d === 'Saturday') {
+          if (schedule.data[p][d].AM === '基础班' || schedule.data[p][d].PM === '基础班')
+            jc++
+        }
+        else {
+          if (schedule.data[p][d][getTaskPeriod(taskConfigs, '基础班', 'PM')] === '基础班')
+            jc++
+        }
 
         // 校验同一个人一天不能同时包揽3个随访
         const isSuiFang = (t: string) => t === '随访上午' || t === '随访下午' || t === '随访夜'

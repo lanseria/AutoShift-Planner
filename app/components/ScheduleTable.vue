@@ -19,8 +19,12 @@ function handleTaskChange(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM'
   store.updateTask(person, day, period, value === '' ? '' : value as TaskName)
 }
 
-function isTaskDisabled(task: TaskInfo, period: 'AM' | 'PM' | 'NIGHT'): boolean {
-  if (period === 'NIGHT' && task.name !== '随访夜' && task.name !== '休假' && task.name !== '')
+function isTaskDisabled(task: TaskInfo, period: 'AM' | 'PM' | 'NIGHT', day: DayOfWeek): boolean {
+  // 特殊规则：周六基础班可以排在上午或者下午
+  if (task.name === '基础班' && day === 'Saturday' && (period === 'AM' || period === 'PM'))
+    return false
+
+  if (period === 'NIGHT' && task.name !== '随访夜' && task.name !== '休假' && task.name !== '休息' && task.name !== '')
     return true
   if (task.name === '随访夜' && period !== 'NIGHT')
     return true
@@ -42,35 +46,60 @@ function getCellClasses(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM' |
   const task = store.schedule.data[person][day][period]
   const highlighted = isHighlighted(person, day, period)
 
-  // 1. 如果处于规则高亮状态
-  if (highlighted) {
-    return 'bg-blue-200 ring-2 ring-blue-500 z-10 relative text-blue-900 font-bold'
+  let classes = ''
+
+  // 1. 根据人员分配背景颜色
+  switch (person) {
+    case '组长': classes += 'bg-slate-100 hover:bg-slate-200 '; break
+    case '成员A': classes += 'bg-green-50 hover:bg-green-100 '; break
+    case '成员B': classes += 'bg-amber-50 hover:bg-amber-100 '; break
+    case '成员C': classes += 'bg-violet-50 hover:bg-violet-100 '; break
+    default: classes += 'bg-gray-50 hover:bg-gray-100 '; break
   }
 
-  // 2. 根据任务类型分配背景色和文字颜色
+  // 2. 规则高亮
+  if (highlighted) {
+    classes += 'ring-2 ring-blue-500 z-10 relative '
+  }
+
+  // 3. 根据任务类型分配文字颜色
   switch (task) {
     case '':
-      return 'bg-amber-200 hover:bg-amber-300 text-amber-900 font-bold' // 醒目的未设置 (预留门诊)
+      classes += 'text-gray-400 font-bold opacity-70' // 未设置变淡
+      break
     case '休假':
-      return 'bg-gray-100 hover:bg-gray-200 text-gray-400' // 置灰的休假
+      classes += 'text-gray-400 font-medium opacity-50 line-through' // 休假变淡加删除线
+      break
+    case '休息':
+      classes += 'text-teal-500 font-medium opacity-80' // 休息使用青色，不加删除线
+      break
     case '门诊':
-      return 'bg-rose-50 hover:bg-rose-100 text-rose-700 font-medium' // 优先手动任务
+      classes += 'text-rose-600 font-bold'
+      break
     case '随访上午':
     case '随访下午':
     case '随访夜':
+      classes += 'text-blue-600 font-semibold'
+      break
     case '基础班':
-      return 'bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium' // 每日基础任务
+      classes += 'text-cyan-600 font-bold'
+      break
     case '电话':
     case '筛查':
-      return 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-medium' // 个人必排任务
+      classes += 'text-emerald-600 font-semibold'
+      break
     case '运动处方':
     case '舌苔评估':
-      return 'bg-purple-50 hover:bg-purple-100 text-purple-700 font-medium' // 部门必排任务
+      classes += 'text-pink-600 font-semibold'
+      break
     case '群石墨修改':
-      return 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium' // 团队固定任务
+      classes += 'text-indigo-600 font-semibold'
+      break
     default:
-      return 'bg-transparent hover:bg-gray-50'
+      classes += 'text-gray-700'
   }
+
+  return classes
 }
 </script>
 
@@ -147,7 +176,7 @@ function getCellClasses(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM' |
                   v-for="task in taskList"
                   :key="task.name"
                   :value="task.name"
-                  :disabled="isTaskDisabled(task, 'AM')"
+                  :disabled="isTaskDisabled(task, 'AM', day)"
                   class="text-gray-900 font-normal"
                 >
                   {{ task.name }}
@@ -177,7 +206,7 @@ function getCellClasses(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM' |
                   v-for="task in taskList"
                   :key="task.name"
                   :value="task.name"
-                  :disabled="isTaskDisabled(task, 'PM')"
+                  :disabled="isTaskDisabled(task, 'PM', day)"
                   class="text-gray-900 font-normal"
                 >
                   {{ task.name }}
@@ -207,7 +236,7 @@ function getCellClasses(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM' |
                   v-for="task in taskList"
                   :key="task.name"
                   :value="task.name"
-                  :disabled="isTaskDisabled(task, 'NIGHT')"
+                  :disabled="isTaskDisabled(task, 'NIGHT', day)"
                   class="text-gray-900 font-normal"
                 >
                   {{ task.name }}

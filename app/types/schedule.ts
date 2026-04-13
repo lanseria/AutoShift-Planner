@@ -10,6 +10,7 @@ export type TaskName
     | '舌苔评估'
     | '群石墨修改'
     | '休假'
+    | '休息'
     | ''
 
 export interface TaskInfo {
@@ -31,6 +32,7 @@ export const DEFAULT_TASKS: Record<TaskName, TaskInfo> = {
   '舌苔评估': { name: '舌苔评估', period: 'AM', type: 'DEPT_MANDATORY', weight: 0.8 },
   '群石墨修改': { name: '群石墨修改', period: 'PM', type: 'FIXED', weight: 0.8 },
   '休假': { name: '休假', period: 'ANY', type: 'MANUAL', weight: 0 },
+  '休息': { name: '休息', period: 'ANY', type: 'AUTO', weight: 0 },
   '': { name: '', period: 'ANY', type: 'AUTO', weight: 0 },
 }
 

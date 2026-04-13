@@ -5,7 +5,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { useAlgorithmWorker } from '~/composables/useAlgorithmWorker'
 import { DAYS, DEFAULT_TASKS, STAFF } from '~/types/schedule'
-import { getPrevWeekContext } from '~/utils/algorithm'
+import { getPrevWeekContext, verifySchedule } from '~/utils/algorithm'
 import { calculateWorkload, getWeekStart, loadSchedule, saveSchedule } from '~/utils/schedule'
 
 export const useScheduleStore = defineStore('schedule', () => {
@@ -15,6 +15,16 @@ export const useScheduleStore = defineStore('schedule', () => {
 
   // 任务配置状态
   const taskConfigs = ref<Record<TaskName, TaskInfo>>(JSON.parse(JSON.stringify(DEFAULT_TASKS)))
+
+  const activeRules = ref<string[]>([
+    'daily_basic',
+    'dept_mandatory',
+    'fixed_tasks',
+    'personal_mandatory',
+    'consecutive_rest',
+    'night_fatigue',
+    'am_fatigue',
+  ])
 
   // 立即加载配置
   const storedConfigs = localStorage.getItem('taskConfigs')
@@ -122,20 +132,10 @@ export const useScheduleStore = defineStore('schedule', () => {
     clearGenerated()
   }
 
-  function resetKeepClinic() {
+  function verifyCurrentSchedule() {
     if (!schedule.value)
-      return
-    for (const person of STAFF) {
-      for (const day of DAYS) {
-        if (schedule.value.data[person][day].AM !== '门诊')
-          schedule.value.data[person][day].AM = ''
-        if (schedule.value.data[person][day].PM !== '门诊')
-          schedule.value.data[person][day].PM = ''
-        if (schedule.value.data[person][day].NIGHT !== '门诊')
-          schedule.value.data[person][day].NIGHT = ''
-      }
-    }
-    clearGenerated()
+      return { valid: false, errors: ['当前没有排班表'] }
+    return verifySchedule(schedule.value, activeRules.value, taskConfigs.value)
   }
 
   function checkWeekendAlert() {
@@ -183,16 +183,6 @@ export const useScheduleStore = defineStore('schedule', () => {
   function clearHighlight() {
     highlightedTasks.value = null
   }
-
-  const activeRules = ref<string[]>([
-    'daily_basic',
-    'dept_mandatory',
-    'fixed_tasks',
-    'personal_mandatory',
-    'consecutive_rest',
-    'night_fatigue',
-    'am_fatigue',
-  ])
 
   function toggleRule(ruleKey: string) {
     if (activeRules.value.includes(ruleKey)) {
@@ -291,7 +281,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     autoGenerate,
     save,
     resetAll,
-    resetKeepClinic,
+    verifyCurrentSchedule,
     checkWeekendAlert,
     goToNextWeek,
     setHighlight,

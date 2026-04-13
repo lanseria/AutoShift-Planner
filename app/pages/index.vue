@@ -58,9 +58,18 @@ function handleResetAll() {
   toast.success('已全部重置为未设置状态')
 }
 
-function handleResetKeepClinic() {
-  store.resetKeepClinic()
-  toast.success('已重置除门诊外的所有任务')
+function handleVerifyRules() {
+  const res = store.verifyCurrentSchedule()
+  if (res.valid) {
+    toast.success('校验通过！当前排班表完全符合开启的规则。')
+  }
+  else {
+    // 错误过多时截断显示
+    const displayErrors = res.errors.length > 3
+      ? `${res.errors.slice(0, 3).join('；')}...等共 ${res.errors.length} 处违规`
+      : res.errors.join('；')
+    toast.error(displayErrors)
+  }
 }
 </script>
 
@@ -121,11 +130,11 @@ function handleResetKeepClinic() {
                   <span class="hidden sm:inline">全部重置</span>
                 </button>
                 <button
-                  class="text-sm text-gray-700 font-medium px-3 py-1.5 border border-gray-200 rounded-lg inline-flex gap-1.5 transition-colors items-center items-center hover:bg-gray-50"
-                  @click="handleResetKeepClinic"
+                  class="text-sm text-blue-700 font-medium px-3 py-1.5 border border-blue-200 rounded-lg bg-blue-50 inline-flex gap-1.5 transition-colors items-center hover:bg-blue-100"
+                  @click="handleVerifyRules"
                 >
-                  <div class="i-carbon-clean text-sm" />
-                  <span class="hidden sm:inline">保留门诊重置</span>
+                  <div class="i-carbon-spell-check text-sm" />
+                  <span class="hidden sm:inline">校验规则</span>
                 </button>
                 <button
                   class="text-sm text-gray-700 font-medium px-3 py-1.5 border border-gray-200 rounded-lg inline-flex gap-1.5 transition-colors items-center hover:bg-gray-50"

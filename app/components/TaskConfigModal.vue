@@ -11,8 +11,8 @@ const store = useScheduleStore()
 
 const editableConfigs = ref<Record<TaskName, TaskInfo>>(JSON.parse(JSON.stringify(store.taskConfigs)))
 
-// 过滤掉不可编辑的系统项（如空值或纯休假项可以限制）
-const editableTasks = Object.keys(DEFAULT_TASKS).filter(k => k !== '' && k !== '休假') as TaskName[]
+// 过滤掉不可编辑的系统项
+const editableTasks = Object.keys(DEFAULT_TASKS).filter(k => k !== '' && k !== '休假' && k !== '休息') as TaskName[]
 
 watch(() => props.modelValue, (val) => {
   if (val) {
