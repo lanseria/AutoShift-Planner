@@ -22,7 +22,9 @@ export const useScheduleStore = defineStore('schedule', () => {
     'fixed_tasks',
     'personal_mandatory',
     'consecutive_rest',
-    'night_fatigue',
+    'night_fatigue_sfam',
+    'night_fatigue_stpg',
+    'night_fatigue_mz',
     'am_fatigue',
   ])
 
@@ -174,16 +176,6 @@ export const useScheduleStore = defineStore('schedule', () => {
     loadWeek()
   }
 
-  const highlightedTasks = ref<TaskName[] | null>(null)
-
-  function setHighlight(tasks: TaskName[]) {
-    highlightedTasks.value = tasks
-  }
-
-  function clearHighlight() {
-    highlightedTasks.value = null
-  }
-
   function toggleRule(ruleKey: string) {
     if (activeRules.value.includes(ruleKey)) {
       activeRules.value = activeRules.value.filter(r => r !== ruleKey)
@@ -301,7 +293,6 @@ export const useScheduleStore = defineStore('schedule', () => {
     isUnbalanced,
     workloadDiff,
     showWeekendAlert,
-    highlightedTasks,
     activeRules,
     loadWeek,
     prevWeek,
@@ -314,8 +305,6 @@ export const useScheduleStore = defineStore('schedule', () => {
     verifyCurrentSchedule,
     checkWeekendAlert,
     goToNextWeek,
-    setHighlight,
-    clearHighlight,
     toggleRule,
     generatedResults,
     applyGenerated,

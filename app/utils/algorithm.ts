@@ -43,6 +43,16 @@ function isAMFatigueTask(task: TaskName): boolean {
   return task === '随访上午' || task === '舌苔评估' || task === '门诊'
 }
 
+function isNightFatigueRestricted(task: TaskName, activeRules: string[]): boolean {
+  if (task === '随访上午' && activeRules.includes('night_fatigue_sfam'))
+    return true
+  if (task === '舌苔评估' && activeRules.includes('night_fatigue_stpg'))
+    return true
+  if (task === '门诊' && activeRules.includes('night_fatigue_mz'))
+    return true
+  return false
+}
+
 function getPrevDay(day: DayOfWeek): DayOfWeek | null {
   const idx = DAYS.indexOf(day)
   return idx > 0 ? DAYS[idx - 1]! : null
@@ -556,7 +566,7 @@ function tryGenerate(
             const prevDay = getPrevDay(d)
             const prevNIGHT = prevDay ? schedule.data[p][prevDay].NIGHT : context.sundayNIGHT[p]
             const prevAM = prevDay ? schedule.data[p][prevDay].AM : context.sundayAM[p]
-            if (hasRule('night_fatigue') && prevNIGHT === '随访夜')
+            if (prevNIGHT === '随访夜' && isNightFatigueRestricted(task, activeRules))
               return false
             if (hasRule('am_fatigue') && isAMFatigueTask(prevAM) && isAMFatigueTask(task))
               return false
@@ -625,7 +635,7 @@ function tryGenerate(
         const prevAM = prevDay ? schedule.data[p][prevDay].AM : context.sundayAM[p]
         const nextAM = nextDay ? schedule.data[p][nextDay].AM : ('' as TaskName)
 
-        if (hasRule('night_fatigue') && prevNIGHT === '随访夜')
+        if (prevNIGHT === '随访夜' && isNightFatigueRestricted('舌苔评估', activeRules))
           return false
         if (hasRule('am_fatigue') && (isAMFatigueTask(prevAM) || isAMFatigueTask(nextAM)))
           return false
@@ -808,16 +818,14 @@ export function verifySchedule(
         errors.push(`${p} 的两天休假必须连续`)
     }
 
-    if (hasRule('night_fatigue')) {
-      if (context.sundayNIGHT[p] === '随访夜' && isAMFatigue(schedule.data[p].Monday.AM)) {
-        errors.push(`${p} 上周日排了随访夜，本周一上午不能排疲劳任务`)
-      }
-      for (let i = 0; i < 6; i++) {
-        const d = DAYS[i]!
-        const nextD = DAYS[i + 1]!
-        if (schedule.data[p][d].NIGHT === '随访夜' && isAMFatigue(schedule.data[p][nextD].AM)) {
-          errors.push(`${DAY_LABELS[d]} ${p} 排了随访夜，次日上午不能排疲劳任务`)
-        }
+    if (context.sundayNIGHT[p] === '随访夜' && isNightFatigueRestricted(schedule.data[p].Monday.AM, activeRules)) {
+      errors.push(`${p} 上周日排了随访夜，本周一上午安排了防疲劳禁止的任务`)
+    }
+    for (let i = 0; i < 6; i++) {
+      const d = DAYS[i]!
+      const nextD = DAYS[i + 1]!
+      if (schedule.data[p][d].NIGHT === '随访夜' && isNightFatigueRestricted(schedule.data[p][nextD].AM, activeRules)) {
+        errors.push(`${DAY_LABELS[d]} ${p} 排了随访夜，次日上午安排了防疲劳禁止的任务`)
       }
     }
 
@@ -966,18 +974,16 @@ function validateSchedule(
         return false
     }
 
-    if (hasRule('night_fatigue')) {
-      if (context.sundayNIGHT[p] === '随访夜' && isAMFatigueTask(schedule.data[p].Monday.AM)) {
-        if (!isManual(p, 'Monday', 'AM'))
+    if (context.sundayNIGHT[p] === '随访夜' && isNightFatigueRestricted(schedule.data[p].Monday.AM, activeRules)) {
+      if (!isManual(p, 'Monday', 'AM'))
+        return false
+    }
+    for (let i = 0; i < 6; i++) {
+      const d = DAYS[i]!
+      const nextD = DAYS[i + 1]!
+      if (schedule.data[p][d].NIGHT === '随访夜' && isNightFatigueRestricted(schedule.data[p][nextD].AM, activeRules)) {
+        if (!isManual(p, d, 'NIGHT') || !isManual(p, nextD, 'AM'))
           return false
-      }
-      for (let i = 0; i < 6; i++) {
-        const d = DAYS[i]!
-        const nextD = DAYS[i + 1]!
-        if (schedule.data[p][d].NIGHT === '随访夜' && isAMFatigueTask(schedule.data[p][nextD].AM)) {
-          if (!isManual(p, d, 'NIGHT') || !isManual(p, nextD, 'AM'))
-            return false
-        }
       }
     }
 

@@ -33,18 +33,10 @@ function isTaskDisabled(task: TaskInfo, period: 'AM' | 'PM' | 'NIGHT', day: DayO
   return task.period !== period
 }
 
-function isHighlighted(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM' | 'NIGHT'): boolean {
-  if (!store.highlightedTasks || !store.schedule)
-    return false
-  const task = store.schedule.data[person][day][period]
-  return store.highlightedTasks.includes(task)
-}
-
 function getCellClasses(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM' | 'NIGHT'): string {
   if (!store.schedule)
     return ''
   const task = store.schedule.data[person][day][period]
-  const highlighted = isHighlighted(person, day, period)
 
   let classes = ''
 
@@ -57,12 +49,7 @@ function getCellClasses(person: StaffName, day: DayOfWeek, period: 'AM' | 'PM' |
     default: classes += 'bg-gray-50 hover:bg-gray-100 '; break
   }
 
-  // 2. 规则高亮
-  if (highlighted) {
-    classes += 'ring-2 ring-blue-500 z-10 relative '
-  }
-
-  // 3. 根据任务类型分配文字颜色
+  // 2. 根据任务类型分配文字颜色
   switch (task) {
     case '':
       classes += 'text-gray-400 font-bold opacity-70' // 未设置变淡

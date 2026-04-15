@@ -5,11 +5,17 @@ import { ref } from 'vue'
 const store = useScheduleStore()
 const isTaskConfigOpen = ref(false)
 
-interface Rule {
+interface SubRule {
   key: string
+  label: string
+}
+
+interface Rule {
+  key: string | null
   label: string
   desc: string
   tasks: TaskName[]
+  subRules?: SubRule[]
 }
 
 const rules: Rule[] = [
@@ -18,7 +24,17 @@ const rules: Rule[] = [
   { key: 'fixed_tasks', label: '固定任务', desc: '周四下午 2人、周六下午 1人 负责群石墨修改', tasks: ['群石墨修改'] },
   { key: 'personal_mandatory', label: '个人必排', desc: '每个人每周只能排 1次电话、1次筛查，不能多不能少', tasks: ['电话', '筛查'] },
   { key: 'consecutive_rest', label: '连休规则', desc: '每人每周必须有2天全天休息 (连续2天，或周一+周日跨周)', tasks: ['休假'] },
-  { key: 'night_fatigue', label: '夜班防疲劳', desc: '排 随访夜 后，次日上午不能排随访上午、舌苔评估和门诊', tasks: ['随访夜', '随访上午', '舌苔评估', '门诊'] },
+  {
+    key: null,
+    label: '夜班防疲劳',
+    desc: '排随访夜后，次日上午不能安排：',
+    tasks: [],
+    subRules: [
+      { key: 'night_fatigue_sfam', label: '随访上午' },
+      { key: 'night_fatigue_stpg', label: '舌苔评估' },
+      { key: 'night_fatigue_mz', label: '门诊' },
+    ],
+  },
   { key: 'am_fatigue', label: '上午防疲劳', desc: '门诊、随访上午、舌苔评估 不可连续两天排在上午', tasks: ['门诊', '随访上午', '舌苔评估'] },
 ]
 </script>
@@ -42,12 +58,10 @@ const rules: Rule[] = [
       <div class="flex flex-col gap-1">
         <div
           v-for="rule in rules"
-          :key="rule.key"
+          :key="rule.label"
           class="group px-3 py-2 rounded-md flex gap-3 transition-colors items-start hover:bg-blue-50"
-          @mouseenter="store.setHighlight(rule.tasks)"
-          @mouseleave="store.clearHighlight()"
         >
-          <div class="mt-0.5">
+          <div v-if="rule.key" class="mt-0.5">
             <input
               type="checkbox"
               :checked="store.activeRules.includes(rule.key)"
@@ -55,12 +69,14 @@ const rules: Rule[] = [
               @change="store.toggleRule(rule.key)"
             >
           </div>
+          <div v-else class="mt-0.5 w-4" />
+
           <div class="flex-1">
             <div class="flex items-center justify-between">
-              <span class="text-sm text-gray-800 font-medium transition-colors group-hover:text-blue-700" :class="store.activeRules.includes(rule.key) ? '' : 'text-gray-400 line-through'">
+              <span class="text-sm text-gray-800 font-medium transition-colors group-hover:text-blue-700" :class="rule.key && !store.activeRules.includes(rule.key) ? 'text-gray-400 line-through' : ''">
                 {{ rule.label }}
               </span>
-              <div class="flex gap-1">
+              <div v-if="rule.tasks.length" class="flex gap-1">
                 <span
                   v-for="task in rule.tasks"
                   :key="task"
@@ -70,9 +86,16 @@ const rules: Rule[] = [
                 </span>
               </div>
             </div>
-            <p class="text-xs text-gray-500 mt-1" :class="store.activeRules.includes(rule.key) ? '' : 'opacity-50'">
+            <p class="text-xs text-gray-500 mt-1" :class="rule.key && !store.activeRules.includes(rule.key) ? 'opacity-50' : ''">
               {{ rule.desc }}
             </p>
+
+            <div v-if="rule.subRules" class="mt-2.5 p-2 border border-gray-100 rounded bg-white flex flex-wrap gap-4">
+              <label v-for="sub in rule.subRules" :key="sub.key" class="flex gap-1.5 cursor-pointer items-center">
+                <input type="checkbox" :checked="store.activeRules.includes(sub.key)" class="text-blue-600 rounded focus:ring-blue-500" @change="store.toggleRule(sub.key)">
+                <span class="text-xs text-gray-700" :class="store.activeRules.includes(sub.key) ? '' : 'text-gray-400 line-through'">{{ sub.label }}</span>
+              </label>
+            </div>
           </div>
         </div>
       </div>
