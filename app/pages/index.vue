@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import { calculateWorkload } from '~/utils/schedule'
 
-definePageMeta({
-  layout: 'home',
-})
-
 const store = useScheduleStore()
 const toast = useToast()
 
