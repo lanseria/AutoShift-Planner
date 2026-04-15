@@ -57,7 +57,14 @@ onMounted(() => {
   store.checkWeekendAlert()
 })
 
-async function handleAutoGenerate() {
+const isGenerateModalOpen = ref(false)
+
+function handleAutoGenerateClick() {
+  isGenerateModalOpen.value = true
+}
+
+async function doAutoGenerate(mode: 'current' | 'clinic_only') {
+  isGenerateModalOpen.value = false
   // 1. 先进行槽位预校验
   const checkRes = store.checkFeasibility()
   if (checkRes.status === 'error') {
@@ -80,7 +87,7 @@ async function handleAutoGenerate() {
   }
 
   // 2. 校验通过，执行排班算法
-  const res = await store.autoGenerate()
+  const res = await store.autoGenerate(mode)
   if (res.success)
     toast.success(res.msg)
   else
@@ -205,7 +212,7 @@ function handleVerifyRules() {
                 <button
                   class="text-sm text-gray-700 font-medium px-3 py-1.5 border border-gray-200 rounded-lg inline-flex gap-1.5 transition-colors items-center hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                   :disabled="store.isGenerating"
-                  @click="handleAutoGenerate"
+                  @click="handleAutoGenerateClick"
                 >
                   <div v-if="store.isGenerating" class="i-carbon-renew text-sm animate-spin" />
                   <div v-else class="i-carbon-machine-learning-model text-sm" />
@@ -298,5 +305,41 @@ function handleVerifyRules() {
 
     <WeekendAlert />
     <ToastContainer />
+
+    <!-- 自动生成模式选择弹窗 -->
+    <Teleport to="body">
+      <div v-if="isGenerateModalOpen" class="flex items-center inset-0 justify-center fixed z-50">
+        <div class="bg-black/40 inset-0 absolute backdrop-blur-sm" @click="isGenerateModalOpen = false" />
+        <div class="mx-4 rounded-xl bg-white flex flex-col max-w-md w-full shadow-xl relative overflow-hidden">
+          <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h3 class="text-xl text-gray-900 font-bold flex gap-2 items-center">
+              <div class="i-carbon-machine-learning-model text-blue-500" />
+              选择自动生成基线
+            </h3>
+            <button class="text-gray-400 p-2 rounded-lg transition-colors hover:text-gray-600 hover:bg-gray-100" @click="isGenerateModalOpen = false">
+              <div class="i-carbon-close text-xl" />
+            </button>
+          </div>
+          <div class="p-6 flex flex-col gap-4">
+            <button class="group p-4 text-left border border-blue-200 rounded-lg bg-blue-50 shadow-sm transition-all hover:bg-blue-100 hover:shadow" @click="doAutoGenerate('current')">
+              <div class="text-lg text-blue-800 font-semibold group-hover:text-blue-900">
+                按当前排班表生成
+              </div>
+              <div class="text-sm text-blue-600 mt-1">
+                保留表格中所有已安排的任务作为约束，仅填补剩余的空位。适用于在当前方案上进行补充。
+              </div>
+            </button>
+            <button class="group p-4 text-left border border-gray-200 rounded-lg bg-gray-50 shadow-sm transition-all hover:bg-gray-100 hover:shadow" @click="doAutoGenerate('clinic_only')">
+              <div class="text-lg text-gray-800 font-semibold group-hover:text-gray-900">
+                按仅包含门诊/休假生成
+              </div>
+              <div class="text-sm text-gray-500 mt-1">
+                清除除门诊和休假外的所有任务，重新全局搜索最优排班方案。
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>

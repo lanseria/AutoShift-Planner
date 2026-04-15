@@ -241,21 +241,37 @@ export const useScheduleStore = defineStore('schedule', () => {
     }
   }
 
-  async function autoGenerate(): Promise<{ success: boolean, msg: string }> {
+  async function autoGenerate(mode: 'current' | 'clinic_only'): Promise<{ success: boolean, msg: string }> {
     if (!schedule.value)
       return { success: false, msg: '没有排班表' }
 
-    // 创建一个仅包含门诊的排班表副本作为算法基线
-    // 将其他所有任务视为空，以便重新生成时不被当前界面上的旧方案残留数据干扰
     const baseSchedule = JSON.parse(JSON.stringify(schedule.value)) as WeekSchedule
-    for (const p of STAFF) {
-      for (const d of DAYS) {
-        if (baseSchedule.data[p][d].AM !== '门诊')
-          baseSchedule.data[p][d].AM = ''
-        if (baseSchedule.data[p][d].PM !== '门诊')
-          baseSchedule.data[p][d].PM = ''
-        if (baseSchedule.data[p][d].NIGHT !== '门诊')
-          baseSchedule.data[p][d].NIGHT = ''
+
+    if (mode === 'clinic_only') {
+      // 仅保留门诊和休假，将其他所有任务视为空以便重新全局搜索
+      for (const p of STAFF) {
+        for (const d of DAYS) {
+          if (baseSchedule.data[p][d].AM !== '门诊' && baseSchedule.data[p][d].AM !== '休假')
+            baseSchedule.data[p][d].AM = ''
+          if (baseSchedule.data[p][d].PM !== '门诊' && baseSchedule.data[p][d].PM !== '休假')
+            baseSchedule.data[p][d].PM = ''
+          if (baseSchedule.data[p][d].NIGHT !== '门诊' && baseSchedule.data[p][d].NIGHT !== '休假')
+            baseSchedule.data[p][d].NIGHT = ''
+        }
+      }
+    }
+    else {
+      // current 模式：保留当前所有排班作为约束基线
+      // 必须将之前算法生成的 "休息" 清空，避免阻碍算法在这些格子上填充
+      for (const p of STAFF) {
+        for (const d of DAYS) {
+          if (baseSchedule.data[p][d].AM === '休息')
+            baseSchedule.data[p][d].AM = ''
+          if (baseSchedule.data[p][d].PM === '休息')
+            baseSchedule.data[p][d].PM = ''
+          if (baseSchedule.data[p][d].NIGHT === '休息')
+            baseSchedule.data[p][d].NIGHT = ''
+        }
       }
     }
 
