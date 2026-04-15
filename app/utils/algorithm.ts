@@ -571,6 +571,18 @@ function tryGenerate(
             if (hasRule('am_fatigue') && isAMFatigueTask(prevAM) && isAMFatigueTask(task))
               return false
           }
+
+          if (hasRule('same_day_fatigue')) {
+            if (task === '随访夜') {
+              if (isAMFatigueTask(schedule.data[p][d].AM) || isAMFatigueTask(schedule.data[p][d].PM))
+                return false
+            }
+            else if (isAMFatigueTask(task)) {
+              if (schedule.data[p][d].NIGHT === '随访夜')
+                return false
+            }
+          }
+
           return true
         })
         if (cands.length === 0)
@@ -638,6 +650,8 @@ function tryGenerate(
         if (prevNIGHT === '随访夜' && isNightFatigueRestricted('舌苔评估', activeRules))
           return false
         if (hasRule('am_fatigue') && (isAMFatigueTask(prevAM) || isAMFatigueTask(nextAM)))
+          return false
+        if (hasRule('same_day_fatigue') && schedule.data[p][d].NIGHT === '随访夜')
           return false
         return true
       })
@@ -804,6 +818,14 @@ export function verifySchedule(
         emptyDays++
         emptyDayList.push(d)
       }
+
+      if (hasRule('same_day_fatigue')) {
+        const hasHeavyAM = isAMFatigueTask(am)
+        const hasHeavyPM = isAMFatigueTask(pm)
+        if (night === '随访夜' && (hasHeavyAM || hasHeavyPM)) {
+          errors.push(`${DAY_LABELS[d]} ${p} 同一天安排了随访夜及门诊/舌苔评估/随访上午`)
+        }
+      }
     }
     if (emptyDays !== restDaysConfig[p]) {
       errors.push(`${p} 的休假天数应为 ${restDaysConfig[p]} 天，实际为 ${emptyDays} 天`)
@@ -958,6 +980,20 @@ function validateSchedule(
       if (allRest) {
         emptyDays++
         emptyDayList.push(d)
+      }
+
+      if (hasRule('same_day_fatigue')) {
+        const hasHeavyAM = isAMFatigueTask(am)
+        const hasHeavyPM = isAMFatigueTask(pm)
+        if (night === '随访夜' && (hasHeavyAM || hasHeavyPM)) {
+          const manualNight = isManual(p, d, 'NIGHT')
+          const manualAM = hasHeavyAM ? isManual(p, d, 'AM') : true
+          const manualPM = hasHeavyPM ? isManual(p, d, 'PM') : true
+          // 如果只要有一个违反规则的任务是算法生成的，则该组合不合法
+          if (!manualNight || !manualAM || !manualPM) {
+            return false
+          }
+        }
       }
     }
 

@@ -26,6 +26,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     'night_fatigue_stpg',
     'night_fatigue_mz',
     'am_fatigue',
+    'same_day_fatigue',
   ])
 
   // 立即加载配置

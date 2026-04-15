@@ -36,6 +36,7 @@ const rules: Rule[] = [
     ],
   },
   { key: 'am_fatigue', label: '上午防疲劳', desc: '门诊、随访上午、舌苔评估 不可连续两天排在上午', tasks: ['门诊', '随访上午', '舌苔评估'] },
+  { key: 'same_day_fatigue', label: '同日防疲劳', desc: '同一个人在当天安排了门诊、舌苔评估或随访上午，则不能安排随访夜', tasks: ['门诊', '舌苔评估', '随访上午', '随访夜'] },
 ]
 </script>
 
